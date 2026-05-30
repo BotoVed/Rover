@@ -1,0 +1,1 @@
+"""Rover — Home Assistant integration."""
