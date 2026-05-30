@@ -2,27 +2,24 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
-from rover.const import (
-    DEV_CLIMATE,
-    DEV_LIGHT,
-    DEV_SWITCH,
-    SHORT_ID_MAX,
-)
-from rover.registry import Device, DeviceRegistry, _compute_short_id
+from rover.const import DEV_LIGHT, DEV_SENSOR, SHORT_ID_MAX
+from rover.registry import Area, Device, Registry, User, _compute_short_id
 
 
-# ---------- Базовая регистрация ----------
+# ---------- Базовая регистрация устройств ----------
 
 def test_register_returns_short_id():
-    r = DeviceRegistry()
+    r = Registry()
     sid = r.register("light.salon", "light", "Люстра")
     assert 0 <= sid <= SHORT_ID_MAX
 
 
 def test_register_assigns_correct_type():
-    r = DeviceRegistry()
+    r = Registry()
     sid = r.register("light.salon", "light", "Люстра")
     device = r.get_by_short_id(sid)
     assert device is not None
@@ -32,14 +29,13 @@ def test_register_assigns_correct_type():
 
 
 def test_register_unknown_domain_raises():
-    r = DeviceRegistry()
+    r = Registry()
     with pytest.raises(ValueError, match="Unsupported HA domain"):
         r.register("media_player.tv", "media_player", "TV")
 
 
 def test_register_supports_all_documented_domains():
-    """Все домены из SPEC.md §5.3 должны поддерживаться."""
-    r = DeviceRegistry()
+    r = Registry()
     cases = [
         ("light.x", "light"),
         ("switch.x", "switch"),
@@ -61,29 +57,26 @@ def test_register_supports_all_documented_domains():
         assert isinstance(sid, int)
 
 
-# ---------- Повторная регистрация ----------
-
 def test_register_same_entity_returns_same_short_id():
-    r = DeviceRegistry()
+    r = Registry()
     sid1 = r.register("light.salon", "light", "Люстра")
-    sid2 = r.register("light.salon", "light", "Люстра обновлённое имя")
+    sid2 = r.register("light.salon", "light", "Обновлённое имя")
     assert sid1 == sid2
 
 
 def test_register_updates_metadata_on_repeat():
-    """Повторная регистрация обновляет name/area/unit, но не short_id."""
-    r = DeviceRegistry()
-    sid = r.register("light.salon", "light", "Старое имя", area="zone1")
-    r.register("light.salon", "light", "Новое имя", area="zone2", unit=None)
+    r = Registry()
+    sid = r.register("light.salon", "light", "Старое", area="z1")
+    r.register("light.salon", "light", "Новое", area="z2", unit=None)
     device = r.get_by_short_id(sid)
-    assert device.n == "Новое имя"
-    assert device.a == "zone2"
+    assert device.n == "Новое"
+    assert device.a == "z2"
 
 
 # ---------- Поиск ----------
 
 def test_lookup_by_entity_id():
-    r = DeviceRegistry()
+    r = Registry()
     sid = r.register("light.salon", "light", "Люстра")
     device = r.get_by_entity_id("light.salon")
     assert device is not None
@@ -91,36 +84,32 @@ def test_lookup_by_entity_id():
 
 
 def test_lookup_missing_returns_none():
-    r = DeviceRegistry()
+    r = Registry()
     assert r.get_by_short_id(12345) is None
     assert r.get_by_entity_id("light.nope") is None
 
 
 def test_contains_and_len():
-    r = DeviceRegistry()
+    r = Registry()
     assert len(r) == 0
-    assert "light.x" not in r
     r.register("light.x", "light", "X")
     assert len(r) == 1
     assert "light.x" in r
 
 
 def test_all_devices_sorted_by_short_id():
-    r = DeviceRegistry()
+    r = Registry()
     r.register("light.a", "light", "A")
     r.register("light.b", "light", "B")
     r.register("light.c", "light", "C")
-    devices = r.all_devices()
-    sids = [d.short_id for d in devices]
+    sids = [d.short_id for d in r.all_devices()]
     assert sids == sorted(sids)
 
 
-# ---------- Коллизии short_id ----------
+# ---------- Коллизии ----------
 
 def test_collision_resolved_with_salt(monkeypatch):
-    """Если первый short_id занят — берём со следующим солтом."""
-    r = DeviceRegistry()
-
+    r = Registry()
     real_compute = _compute_short_id
 
     def fake_compute(entity_id: str, salt: int = 0) -> int:
@@ -135,32 +124,116 @@ def test_collision_resolved_with_salt(monkeypatch):
     assert sid_a != sid_b
 
 
-def test_short_id_stays_after_collision_partner_removed():
-    """short_id за устройством закреплён, даже если коллизионный сосед удалён."""
-    r1 = DeviceRegistry()
-    r1.register("light.a", "light", "A")
-    sid_b_original = r1.register("light.b", "light", "B")
+# ---------- Зоны ----------
 
-    data_path = "_tmp_registry.json"
-    r1.save(data_path)
+def test_set_and_get_areas():
+    r = Registry()
+    r.set_areas([
+        Area(id="salon", n="Гостиная"),
+        Area(id="kitchen", n="Кухня"),
+    ])
+    assert r.get_area("salon").n == "Гостиная"
+    assert r.get_area("kitchen").n == "Кухня"
+    assert r.get_area("nope") is None
 
-    r2 = DeviceRegistry()
-    r2.load(data_path)
-    device_b = r2.get_by_entity_id("light.b")
-    assert device_b is not None
-    assert device_b.short_id == sid_b_original
 
-    import os
-    os.remove(data_path)
+def test_set_areas_replaces_previous():
+    r = Registry()
+    r.set_areas([Area(id="a", n="A")])
+    r.set_areas([Area(id="b", n="B")])
+    assert r.get_area("a") is None
+    assert r.get_area("b") is not None
+
+
+def test_all_areas_sorted():
+    r = Registry()
+    r.set_areas([
+        Area(id="c", n="C"),
+        Area(id="a", n="A"),
+        Area(id="b", n="B"),
+    ])
+    ids = [a.id for a in r.all_areas()]
+    assert ids == ["a", "b", "c"]
+
+
+# ---------- Пользователи ----------
+
+def test_set_and_get_users():
+    r = Registry()
+    r.set_users([
+        User(id="admin", hash="abc123"),
+        User(id="guest", hash="def456"),
+    ])
+    assert r.get_user("admin").hash == "abc123"
+    assert r.get_user("nope") is None
+
+
+def test_set_users_replaces_previous():
+    r = Registry()
+    r.set_users([User(id="a", hash="h1")])
+    r.set_users([User(id="b", hash="h2")])
+    assert r.get_user("a") is None
+    assert r.get_user("b") is not None
+
+
+def test_all_users_sorted():
+    r = Registry()
+    r.set_users([
+        User(id="zoe", hash="h"),
+        User(id="alex", hash="h"),
+    ])
+    ids = [u.id for u in r.all_users()]
+    assert ids == ["alex", "zoe"]
+
+
+# ---------- Экспорт ----------
+
+def test_export_devices_omits_entity_id():
+    """В экспорте не должно быть entity_id."""
+    r = Registry()
+    r.register("light.salon", "light", "Люстра", area="salon")
+    exported = r.export_devices()
+    assert len(exported) == 1
+    item = exported[0]
+    assert "entity_id" not in item
+    assert "id" in item        # short_id
+    assert "n" in item
+    assert "t" in item
+    assert "a" in item
+
+
+def test_export_devices_includes_unit_only_for_sensor():
+    """Поле u включается только для DEV_SENSOR."""
+    r = Registry()
+    r.register("light.x", "light", "Light", unit=None)
+    r.register("sensor.temp", "sensor", "Temp", unit="°C")
+    exported = {item["t"]: item for item in r.export_devices()}
+    assert "u" not in exported[DEV_LIGHT]
+    assert exported[DEV_SENSOR]["u"] == "°C"
+
+
+def test_export_areas_format():
+    r = Registry()
+    r.set_areas([Area(id="salon", n="Гостиная")])
+    exported = r.export_areas()
+    assert exported == [{"id": "salon", "n": "Гостиная"}]
+
+
+def test_export_users_format():
+    """Экспорт users включает id и hash, открытых паролей быть не должно."""
+    r = Registry()
+    r.set_users([User(id="admin", hash="sha256hex")])
+    exported = r.export_users()
+    assert exported == [{"id": "admin", "hash": "sha256hex"}]
 
 
 # ---------- cfgh ----------
 
-def test_cfgh_is_deterministic():
-    """Один и тот же состав → один и тот же cfgh."""
-    r = DeviceRegistry()
+def test_cfgh_deterministic():
+    r = Registry()
     r.register("light.a", "light", "A", area="z1")
-    r.register("switch.b", "switch", "B", area="z2")
+    r.set_areas([Area(id="z1", n="Z1")])
+    r.set_users([User(id="u", hash="h")])
     h1 = r.compute_cfgh()
     h2 = r.compute_cfgh()
     assert h1 == h2
@@ -168,12 +241,11 @@ def test_cfgh_is_deterministic():
 
 
 def test_cfgh_independent_of_registration_order():
-    """Порядок регистрации не влияет на cfgh."""
-    r1 = DeviceRegistry()
+    r1 = Registry()
     r1.register("light.a", "light", "A")
     r1.register("switch.b", "switch", "B")
 
-    r2 = DeviceRegistry()
+    r2 = Registry()
     r2.register("switch.b", "switch", "B")
     r2.register("light.a", "light", "A")
 
@@ -181,7 +253,7 @@ def test_cfgh_independent_of_registration_order():
 
 
 def test_cfgh_changes_when_device_added():
-    r = DeviceRegistry()
+    r = Registry()
     r.register("light.a", "light", "A")
     h1 = r.compute_cfgh()
     r.register("switch.b", "switch", "B")
@@ -190,80 +262,122 @@ def test_cfgh_changes_when_device_added():
 
 
 def test_cfgh_changes_when_name_changes():
-    r = DeviceRegistry()
-    r.register("light.a", "light", "Старое имя")
+    r = Registry()
+    r.register("light.a", "light", "Старое")
     h1 = r.compute_cfgh()
-    r.register("light.a", "light", "Новое имя")
+    r.register("light.a", "light", "Новое")
     h2 = r.compute_cfgh()
     assert h1 != h2
 
 
-def test_cfgh_includes_areas_and_users():
-    """Зоны и пользователи влияют на cfgh."""
-    r = DeviceRegistry()
+def test_cfgh_unaffected_by_entity_id_internals():
+    """cfgh не зависит от entity_id — он не в экспорте."""
+    r = Registry()
     r.register("light.a", "light", "A")
+    exported = r.export_devices()
+    for item in exported:
+        assert "entity_id" not in item
 
-    h_no_areas = r.compute_cfgh()
-    h_with_areas = r.compute_cfgh(areas=[{"id": "z1", "n": "Кухня"}])
-    h_with_users = r.compute_cfgh(users=[{"id": "u1", "n": "admin"}])
-    assert h_no_areas != h_with_areas
-    assert h_no_areas != h_with_users
-    assert h_with_areas != h_with_users
+
+def test_cfgh_changes_when_area_added():
+    r = Registry()
+    r.register("light.a", "light", "A")
+    h1 = r.compute_cfgh()
+    r.set_areas([Area(id="z", n="Zone")])
+    h2 = r.compute_cfgh()
+    assert h1 != h2
+
+
+def test_cfgh_changes_when_user_added():
+    r = Registry()
+    r.register("light.a", "light", "A")
+    h1 = r.compute_cfgh()
+    r.set_users([User(id="u", hash="h")])
+    h2 = r.compute_cfgh()
+    assert h1 != h2
+
+
+def test_cfgh_changes_when_user_hash_changes():
+    r = Registry()
+    r.set_users([User(id="admin", hash="old")])
+    h1 = r.compute_cfgh()
+    r.set_users([User(id="admin", hash="new")])
+    h2 = r.compute_cfgh()
+    assert h1 != h2
 
 
 # ---------- Save / Load ----------
 
 def test_save_and_load_roundtrip(tmp_path):
-    """Сохранение и загрузка не теряют данных."""
-    r1 = DeviceRegistry()
-    sid_a = r1.register("light.a", "light", "Люстра", area="salon", unit=None)
-    sid_b = r1.register("sensor.temp", "sensor", "Температура", area="kitchen", unit="°C")
+    r1 = Registry()
+    sid = r1.register("light.salon", "light", "Люстра", area="salon")
+    r1.set_areas([Area(id="salon", n="Гостиная")])
+    r1.set_users([User(id="admin", hash="abc")])
 
     path = tmp_path / "registry.json"
     r1.save(path)
 
-    r2 = DeviceRegistry()
+    r2 = Registry()
     r2.load(path)
 
-    assert len(r2) == 2
-    assert r2.get_by_short_id(sid_a).entity_id == "light.a"
-    assert r2.get_by_short_id(sid_b).u == "°C"
+    assert len(r2) == 1
+    assert r2.get_by_short_id(sid).entity_id == "light.salon"
+    assert r2.get_area("salon").n == "Гостиная"
+    assert r2.get_user("admin").hash == "abc"
     assert r1.compute_cfgh() == r2.compute_cfgh()
 
 
 def test_load_missing_file_is_noop(tmp_path):
-    """Загрузка из отсутствующего файла не падает."""
-    r = DeviceRegistry()
+    r = Registry()
     r.load(tmp_path / "nope.json")
     assert len(r) == 0
+    assert r.all_areas() == []
+    assert r.all_users() == []
 
 
 def test_load_clears_existing(tmp_path):
-    """Загрузка из файла очищает текущий реестр перед заполнением."""
-    r1 = DeviceRegistry()
+    r1 = Registry()
     r1.register("light.a", "light", "A")
+    r1.set_areas([Area(id="z1", n="Z1")])
+    r1.set_users([User(id="u1", hash="h1")])
     path = tmp_path / "reg.json"
     r1.save(path)
 
-    r2 = DeviceRegistry()
+    r2 = Registry()
     r2.register("switch.b", "switch", "B")
+    r2.set_areas([Area(id="z2", n="Z2")])
+    r2.set_users([User(id="u2", hash="h2")])
     r2.load(path)
 
-    assert len(r2) == 1
     assert "light.a" in r2
     assert "switch.b" not in r2
+    assert r2.get_area("z1") is not None
+    assert r2.get_area("z2") is None
+    assert r2.get_user("u1") is not None
+    assert r2.get_user("u2") is None
+
+
+def test_short_id_stays_after_persistence(tmp_path):
+    """short_id сохраняется после save/load — это критично, см. SB-012."""
+    r1 = Registry()
+    sid_original = r1.register("light.special", "light", "X")
+    path = tmp_path / "reg.json"
+    r1.save(path)
+
+    r2 = Registry()
+    r2.load(path)
+    assert r2.get_by_entity_id("light.special").short_id == sid_original
 
 
 # ---------- short_id корректность ----------
 
 def test_short_id_in_range():
-    r = DeviceRegistry()
+    r = Registry()
     sid = r.register("light.salon", "light", "X")
     assert 0 <= sid <= SHORT_ID_MAX
 
 
 def test_compute_short_id_deterministic():
-    """_compute_short_id даёт одно и то же значение для одного entity_id."""
     a1 = _compute_short_id("light.salon")
     a2 = _compute_short_id("light.salon")
     assert a1 == a2
