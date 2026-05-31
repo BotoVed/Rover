@@ -390,3 +390,109 @@ def test_compute_short_id_deterministic():
 
 def test_compute_short_id_changes_with_salt():
     assert _compute_short_id("light.salon", salt=0) != _compute_short_id("light.salon", salt=1)
+
+
+# ---------- Удаление устройств ----------
+
+def test_remove_device_by_short_id():
+    r = Registry()
+    sid = r.register("light.salon", "light", "Люстра")
+    assert r.remove_device(sid) is True
+    assert r.get_by_short_id(sid) is None
+    assert "light.salon" not in r
+
+
+def test_remove_device_by_entity_id():
+    r = Registry()
+    r.register("light.salon", "light", "Люстра")
+    assert r.remove_device_by_entity_id("light.salon") is True
+    assert "light.salon" not in r
+
+
+def test_remove_device_unknown_returns_false():
+    r = Registry()
+    assert r.remove_device(99999) is False
+    assert r.remove_device_by_entity_id("light.nope") is False
+
+
+def test_remove_device_changes_devices_hash():
+    r = Registry()
+    sid = r.register("light.a", "light", "A")
+    h_before = r.compute_section_hashes()[SEC_DEVICES]
+    r.remove_device(sid)
+    h_after = r.compute_section_hashes()[SEC_DEVICES]
+    assert h_before != h_after
+
+
+def test_remove_then_register_same_entity():
+    """После удаления entity можно зарегистрировать заново.
+
+    short_id может оказаться тем же (если коллизий не было) или другим.
+    """
+    r = Registry()
+    sid1 = r.register("light.salon", "light", "X")
+    r.remove_device(sid1)
+    sid2 = r.register("light.salon", "light", "X")
+    # short_id детерминирован от entity_id, без коллизий должен совпасть
+    assert sid1 == sid2
+
+
+# ---------- Пользователи с паролем ----------
+
+def test_add_user_with_password_hashes_it():
+    r = Registry()
+    r.add_user_with_password("admin", "secret123", salt="abc123")
+    user = r.get_user("admin")
+    assert user is not None
+    assert user.id == "admin"
+    assert user.hash != "secret123"  # пароль не хранится открытым
+    assert len(user.hash) == 64       # SHA-256 hex
+
+
+def test_add_user_with_password_deterministic():
+    """Одинаковый пароль + соль → одинаковый хеш."""
+    r1 = Registry()
+    r2 = Registry()
+    r1.add_user_with_password("u", "p", salt="s")
+    r2.add_user_with_password("u", "p", salt="s")
+    assert r1.get_user("u").hash == r2.get_user("u").hash
+
+
+def test_add_user_with_password_different_salt_different_hash():
+    r1 = Registry()
+    r2 = Registry()
+    r1.add_user_with_password("u", "p", salt="s1")
+    r2.add_user_with_password("u", "p", salt="s2")
+    assert r1.get_user("u").hash != r2.get_user("u").hash
+
+
+def test_add_user_overwrites_existing():
+    r = Registry()
+    r.add_user_with_password("admin", "old", salt="s")
+    old_hash = r.get_user("admin").hash
+    r.add_user_with_password("admin", "new", salt="s")
+    assert r.get_user("admin").hash != old_hash
+
+
+def test_remove_user():
+    r = Registry()
+    r.add_user_with_password("admin", "p", salt="s")
+    assert r.remove_user("admin") is True
+    assert r.get_user("admin") is None
+    assert r.remove_user("admin") is False
+
+
+def test_remove_user_changes_users_hash():
+    r = Registry()
+    r.add_user_with_password("admin", "p", salt="s")
+    h_before = r.compute_section_hashes()[SEC_USERS]
+    r.remove_user("admin")
+    h_after = r.compute_section_hashes()[SEC_USERS]
+    assert h_before != h_after
+
+
+def test_hash_password_staticmethod():
+    h = Registry._hash_password("password123", "saltA")
+    assert len(h) == 64
+    assert h == Registry._hash_password("password123", "saltA")  # детерминирован
+    assert h != Registry._hash_password("password123", "saltB")

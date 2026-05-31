@@ -209,6 +209,46 @@ class Registry:
         """
         return _hash_section(meta)
 
+    # ---------- Удаление устройств ----------
+
+    def remove_device(self, short_id: int) -> bool:
+        """Удалить устройство по short_id.
+
+        Возвращает True, если устройство было удалено.
+        short_id после удаления может быть выдан повторно (SB-043: забываем).
+        """
+        device = self._by_short_id.pop(short_id, None)
+        if device is None:
+            return False
+        self._by_entity_id.pop(device.entity_id, None)
+        return True
+
+    def remove_device_by_entity_id(self, entity_id: str) -> bool:
+        """Удалить устройство по entity_id."""
+        device = self._by_entity_id.get(entity_id)
+        if device is None:
+            return False
+        return self.remove_device(device.short_id)
+
+    # ---------- Управление пользователями ----------
+
+    def add_user_with_password(self, user_id: str, password: str, salt: str) -> None:
+        """Добавить или обновить пользователя.
+
+        Пароль хешируется SHA-256 с общей солью (SB-042).
+        """
+        hashed = self._hash_password(password, salt)
+        self._users[user_id] = User(id=user_id, hash=hashed)
+
+    def remove_user(self, user_id: str) -> bool:
+        """Удалить пользователя. Возвращает True, если был удалён."""
+        return self._users.pop(user_id, None) is not None
+
+    @staticmethod
+    def _hash_password(password: str, salt: str) -> str:
+        """SHA-256 от password + salt в hex."""
+        return hashlib.sha256(f"{password}{salt}".encode("utf-8")).hexdigest()
+
     # ---------- Персистентность ----------
 
     def save(self, path: Path | str) -> None:

@@ -151,6 +151,8 @@ CONF_HOP_LIMIT = "hop_limit"         # 0..7
 CONF_QUEUE_PERIOD = "queue_period"   # период повторов очереди, сек
 CONF_MAX_RETRIES = "max_retries"     # максимум повторов
 CONF_PUSH_ENABLED = "push_enabled"   # включена ли инициативная отправка PUSH
+CONF_PASSWORD_SALT = "password_salt"
+CONF_ACK_TIMEOUT = "ack_timeout"
 
 # Дефолты для config_flow (если значения не заданы пользователем)
 DEFAULT_CONN_TYPE = "serial"
@@ -158,6 +160,7 @@ DEFAULT_CHANNEL = "LongFast"
 DEFAULT_PSK = "AQ=="
 DEFAULT_HOME_NAME = "Мой дом"
 DEFAULT_PUSH_ENABLED = True
+DEFAULT_PASSWORD_SALT_BYTES = 16   # 16 байт = 32 hex символа
 
 # ---------- Параметры очереди (дефолты, переопределяются в config) ----------
 

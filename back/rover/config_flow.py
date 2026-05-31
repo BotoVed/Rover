@@ -1,14 +1,15 @@
 """Config flow для Rover.
 
-Пошаговая настройка через Settings → Integrations.
-Шаг 1 (user): тип подключения, порт/адрес шлюза, имя дома.
-Шаг 2 (advanced): канал, PSK, hop limit, период повторов, ретраи.
+Единственный шаг при первой установке: все базовые параметры на одном экране.
+После установки настройка устройств, пользователей и просмотр конфига —
+через OptionsFlow.
 
-См. SPEC.md §8.1, DECISIONS.md SB-034.
+См. SPEC.md §5, DECISIONS.md SB-034, SB-042, SB-043.
 """
 
 from __future__ import annotations
 
+import secrets
 from typing import Any
 
 import voluptuous as vol
@@ -16,11 +17,13 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 
 from .const import (
+    CONF_ACK_TIMEOUT,
     CONF_CHANNEL,
     CONF_CONN_TYPE,
     CONF_HOME_NAME,
     CONF_HOP_LIMIT,
     CONF_MAX_RETRIES,
+    CONF_PASSWORD_SALT,
     CONF_PORT,
     CONF_PSK,
     CONF_PUSH_ENABLED,
@@ -30,6 +33,7 @@ from .const import (
     DEFAULT_HOME_NAME,
     DEFAULT_HOP_LIMIT,
     DEFAULT_MAX_RETRIES,
+    DEFAULT_PASSWORD_SALT_BYTES,
     DEFAULT_PSK,
     DEFAULT_PUSH_ENABLED,
     DEFAULT_QUEUE_PERIOD,
@@ -37,43 +41,35 @@ from .const import (
 )
 
 CONN_TYPES = ["serial", "tcp"]
+DEFAULT_ACK_TIMEOUT_VALUE = 10
 
 
 class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow для Rover."""
+    """Config flow для Rover — только базовая установка."""
 
     VERSION = 1
 
-    def __init__(self) -> None:
-        self._data: dict[str, Any] = {}
+    @staticmethod
+    def async_get_options_flow(config_entry):
+        from .options_flow import RoverOptionsFlow
+        return RoverOptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Шаг 1: основные параметры подключения."""
+        """Единственный шаг: общие настройки."""
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_advanced()
+            # Генерируем случайную соль для паролей (SB-042)
+            user_input[CONF_PASSWORD_SALT] = secrets.token_hex(DEFAULT_PASSWORD_SALT_BYTES)
+            return self.async_create_entry(
+                title=user_input[CONF_HOME_NAME],
+                data=user_input,
+            )
 
         schema = vol.Schema({
             vol.Required(CONF_HOME_NAME, default=DEFAULT_HOME_NAME): str,
             vol.Required(CONF_CONN_TYPE, default=DEFAULT_CONN_TYPE): vol.In(CONN_TYPES),
             vol.Required(CONF_PORT): str,
-        })
-        return self.async_show_form(step_id="user", data_schema=schema)
-
-    async def async_step_advanced(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Шаг 2: расширенные параметры Meshtastic и очереди."""
-        if user_input is not None:
-            self._data.update(user_input)
-            return self.async_create_entry(
-                title=self._data[CONF_HOME_NAME],
-                data=self._data,
-            )
-
-        schema = vol.Schema({
             vol.Required(CONF_CHANNEL, default=DEFAULT_CHANNEL): str,
             vol.Required(CONF_PSK, default=DEFAULT_PSK): str,
             vol.Required(CONF_HOP_LIMIT, default=DEFAULT_HOP_LIMIT):
@@ -82,6 +78,8 @@ class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
             vol.Required(CONF_MAX_RETRIES, default=DEFAULT_MAX_RETRIES):
                 vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+            vol.Required(CONF_ACK_TIMEOUT, default=DEFAULT_ACK_TIMEOUT_VALUE):
+                vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
             vol.Required(CONF_PUSH_ENABLED, default=DEFAULT_PUSH_ENABLED): bool,
         })
-        return self.async_show_form(step_id="advanced", data_schema=schema)
+        return self.async_show_form(step_id="user", data_schema=schema)
