@@ -108,7 +108,7 @@ short_id → {
 | CV | cover | cmd (open/close/stop), pos | st, pos |
 | LK | lock | cmd (lock/unlock) | st |
 | BS | binary_sensor | — | s |
-| S | sensor | — | v, u |
+| S | sensor | — | v (string), u |
 | SI | siren | s | s |
 | B | button / scene | cmd (press) | — |
 | A | alarm_control_panel | cmd (arm_home/arm_away/arm_night/disarm), pin | st |
@@ -117,6 +117,8 @@ short_id → {
 **Примечание про `bri` (яркость light):** диапазон `0..100` (проценты), не `0..255`. Бэк конвертирует в HA brightness при вызове сервиса (`HA_brightness = bri * 2.55`).
 
 **Примечание про `th` для humidifier:** для типа `H` поле `th` означает целевую влажность (`humidity`), а не температуру.
+
+**Примечание про `v` (sensor value):** передаётся как **строка**, а не Double. Это позволяет передавать любые значения HA: числа (`"23.5"`), enum-состояния (`"running"`), timestamp (`"2026-05-31T14:32:00+00:00"`). Парсинг и интерпретация — на стороне фронта.
 
 ---
 
@@ -324,7 +326,7 @@ cfgh = MD5(json.dumps({
 | sp | Int | fan (percentage) |
 | st | String | cover (open/closed/opening/closing), alarm |
 | pos | Int | cover |
-| v | Double | sensor (значение) |
+| v | String | sensor (значение, любого вида: число, enum, timestamp) |
 | u | String | sensor (единица измерения) |
 
 ### 9.3 PING / PONG (tp=6)
