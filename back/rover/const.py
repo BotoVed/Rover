@@ -16,6 +16,7 @@ TP_CONFIG = 4
 TP_CMD = 5
 TP_PING = 6        # и PONG — тот же tp, направление из контекста
 TP_FRAGMENT = 7
+TP_REQ = 8         # запрос секции/страницы конфига (App → HA)
 
 # ---------- Имена полей пакетов ----------
 
@@ -46,7 +47,7 @@ F_REQ = "req"
 F_CFG = "cfg"
 
 # CONFIG-пакет
-F_SECTION = "s"        # "meta", "ar", "dev", "mpg", "usr"
+F_SECTION = "s"        # "m", "u", "a", "d" (см. SEC_*)
 F_NAME = "n"
 F_GATEWAY = "gw"
 F_CHANNEL = "ch"
@@ -59,6 +60,23 @@ F_CFGH = "cfgh"
 F_PAGE = "pg"
 F_PAGE_TOTAL = "pgt"
 F_DATA = "d"
+
+# ---------- Секции конфига и хеши ----------
+
+SEC_META = "m"
+SEC_USERS = "u"
+SEC_AREAS = "a"
+SEC_DEVICES = "d"
+
+ALL_SECTIONS = (SEC_META, SEC_USERS, SEC_AREAS, SEC_DEVICES)
+
+SECTION_HASH_LENGTH = 4    # хеши секций — 4 hex знака (см. SB-035)
+
+# Размер страницы для секции devices (см. SPEC §8.5)
+DEVICES_PER_PAGE = 5
+
+# Ключ очереди для инициативного PONG (см. SB-038)
+PONG_QUEUE_KEY = "pong"
 
 # Фрагменты
 F_FRAG_ID = "fid"

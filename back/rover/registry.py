@@ -5,66 +5,77 @@
 - зоны (areas),
 - пользователей (users) с хешами паролей.
 
-Отдаёт на фронт только экспортируемые виды (без entity_id, без unit для не-sensor).
-Считает cfgh — хеш экспортируемого конфига для сравнения с фронтом.
+Отдаёт на фронт только экспортируемые виды.
 
-Поддерживает сохранение и загрузку из JSON-файла для персистентности
-между перезапусками HA.
+Считает хеши секций (devices/users/areas) для сравнения с фронтом.
+Хеш секции meta считается выше Registry — на уровне RoverRuntimeData,
+потому что данные meta приходят из config_entry.
 
-См. SPEC.md §5, §8.3 и DECISIONS.md SB-012, SB-029, SB-032.
+См. SPEC.md §5, §8 и DECISIONS.md SB-012, SB-035, SB-037, SB-032.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from rover.const import DEV_SENSOR, HA_DOMAIN_TO_DEV_TYPE, SHORT_ID_MAX
+from rover.const import (
+    DEV_SENSOR,
+    HA_DOMAIN_TO_DEV_TYPE,
+    SEC_AREAS,
+    SEC_DEVICES,
+    SEC_USERS,
+    SECTION_HASH_LENGTH,
+    SHORT_ID_MAX,
+)
 
 
 @dataclass
 class Device:
     """Запись об одном устройстве (полная, как хранит бэк)."""
-    short_id: int          # 0..65535
-    entity_id: str         # HA entity_id, локально на бэке
-    t: str                 # код типа Rover (L, SW, C, ...)
-    n: str                 # friendly name
-    a: str | None = None   # area ID (или None)
-    u: str | None = None   # unit_of_measurement для сенсоров (или None)
+    short_id: int
+    entity_id: str
+    t: str
+    n: str
+    a: str | None = None
+    u: str | None = None
 
 
 @dataclass
 class Area:
     """Запись о зоне."""
-    id: str                # area ID из HA
-    n: str                 # отображаемое имя
+    id: str
+    n: str
 
 
 @dataclass
 class User:
     """Запись о пользователе."""
-    id: str                # идентификатор пользователя
-    hash: str              # SHA-256 пароля с солью (hex)
+    id: str
+    hash: str
 
 
 def _compute_short_id(entity_id: str, salt: int = 0) -> int:
-    """Хеш entity_id в 16-битный Int.
-
-    salt позволяет получить другое значение при коллизии.
-    """
+    """Хеш entity_id в 16-битный Int."""
     key = entity_id if salt == 0 else f"{entity_id}#{salt}"
     digest = hashlib.md5(key.encode("utf-8")).digest()
     return (digest[0] << 8) | digest[1]
 
 
-class Registry:
-    """Единый реестр Rover: устройства + зоны + пользователи.
+def _hash_section(payload: list | dict) -> str:
+    """Хеш одной секции конфига — MD5[:SECTION_HASH_LENGTH] от sort_keys JSON.
 
-    Все мутации — через публичные методы. Прямой доступ к внутренним dict'ам
-    не предусмотрен (используем геттеры).
+    Длина 4 hex знака (см. SB-035) — задача хеша только сигнализация
+    изменений, не уникальность ключей.
     """
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    return hashlib.md5(raw).hexdigest()[:SECTION_HASH_LENGTH]
+
+
+class Registry:
+    """Единый реестр Rover: устройства + зоны + пользователи."""
 
     def __init__(self) -> None:
         self._by_short_id: dict[int, Device] = {}
@@ -82,11 +93,7 @@ class Registry:
         area: str | None = None,
         unit: str | None = None,
     ) -> int:
-        """Зарегистрировать устройство или вернуть его short_id, если уже есть.
-
-        При повторной регистрации обновляются name/area/unit, но не short_id
-        и не тип.
-        """
+        """Зарегистрировать устройство или вернуть его short_id."""
         existing = self._by_entity_id.get(entity_id)
         if existing is not None:
             existing.n = name
@@ -111,7 +118,6 @@ class Registry:
         return sid
 
     def _next_short_id(self, entity_id: str) -> int:
-        """Найти свободный short_id для нового entity_id."""
         for salt in range(SHORT_ID_MAX + 1):
             sid = _compute_short_id(entity_id, salt=salt)
             if sid not in self._by_short_id:
@@ -127,7 +133,6 @@ class Registry:
         return self._by_entity_id.get(entity_id)
 
     def all_devices(self) -> list[Device]:
-        """Все устройства, отсортированные по short_id (детерминированный порядок)."""
         return sorted(self._by_short_id.values(), key=lambda d: d.short_id)
 
     def __len__(self) -> int:
@@ -139,7 +144,6 @@ class Registry:
     # ---------- Зоны ----------
 
     def set_areas(self, areas: list[Area]) -> None:
-        """Полностью переписать список зон."""
         self._areas = {a.id: a for a in areas}
 
     def get_area(self, area_id: str) -> Area | None:
@@ -151,7 +155,6 @@ class Registry:
     # ---------- Пользователи ----------
 
     def set_users(self, users: list[User]) -> None:
-        """Полностью переписать список пользователей."""
         self._users = {u.id: u for u in users}
 
     def get_user(self, user_id: str) -> User | None:
@@ -160,12 +163,12 @@ class Registry:
     def all_users(self) -> list[User]:
         return sorted(self._users.values(), key=lambda u: u.id)
 
-    # ---------- Экспортируемые виды (для CONFIG-пакетов и cfgh) ----------
+    # ---------- Экспорт ----------
 
     def export_devices(self) -> list[dict]:
-        """Устройства в виде, отправляемом на фронт.
+        """Устройства в виде, отправляемом на фронт. Без entity_id.
 
-        Без entity_id. unit включается только для сенсоров (DEV_SENSOR).
+        unit включается только для DEV_SENSOR (см. SPEC §5.4).
         """
         result = []
         for d in self.all_devices():
@@ -176,37 +179,39 @@ class Registry:
         return result
 
     def export_areas(self) -> list[dict]:
-        """Зоны в виде, отправляемом на фронт."""
         return [{"id": a.id, "n": a.n} for a in self.all_areas()]
 
     def export_users(self) -> list[dict]:
-        """Пользователи в виде, отправляемом на фронт.
-
-        Только id и hash пароля. Открытых паролей нет — их вообще нет на бэке.
-        """
         return [{"id": u.id, "hash": u.hash} for u in self.all_users()]
 
-    # ---------- cfgh ----------
+    # ---------- Хеши секций (SB-035) ----------
 
-    def compute_cfgh(self) -> str:
-        """Хеш экспортируемого конфига.
+    def compute_section_hashes(self) -> dict[str, str]:
+        """Хеши секций, которыми владеет Registry: u, a, d.
 
-        Считается только по тому, что реально уходит на фронт (см. SB-029).
-        Изменения внутреннего entity_id не влияют на cfgh — фронту это знать
-        не нужно.
+        Секция m (meta) считается выше — её данные приходят из config_entry,
+        а не из Registry.
+
+        Возвращает мапу {section_code: hash4hex}.
         """
-        payload = {
-            "devices": self.export_devices(),
-            "areas": self.export_areas(),
-            "users": self.export_users(),
+        return {
+            SEC_USERS: _hash_section(self.export_users()),
+            SEC_AREAS: _hash_section(self.export_areas()),
+            SEC_DEVICES: _hash_section(self.export_devices()),
         }
-        raw = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")
-        return hashlib.md5(raw).hexdigest()[:8]
+
+    @staticmethod
+    def hash_meta(meta: dict) -> str:
+        """Хеш секции meta. Принимает уже готовый dict секции.
+
+        Вынесен в staticmethod, потому что Registry не хранит meta —
+        она формируется на уровне RoverRuntimeData из config_entry.
+        """
+        return _hash_section(meta)
 
     # ---------- Персистентность ----------
 
     def save(self, path: Path | str) -> None:
-        """Сохранить весь реестр (устройства + зоны + пользователи) в JSON."""
         path = Path(path)
         data = {
             "devices": [asdict(d) for d in self.all_devices()],
@@ -216,7 +221,6 @@ class Registry:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def load(self, path: Path | str) -> None:
-        """Загрузить реестр из JSON. Текущее состояние очищается перед загрузкой."""
         path = Path(path)
         if not path.exists():
             return
