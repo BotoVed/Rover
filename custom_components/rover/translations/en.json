@@ -1,0 +1,88 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rover — basic setup",
+        "description": "Basic integration settings. Devices, users and config view — in settings after installation.",
+        "data": {
+          "home_name": "Home name",
+          "conn_type": "Connection type",
+          "port": "Port or address",
+          "channel": "Meshtastic channel name",
+          "psk": "Channel key (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Queue retry period (sec)",
+          "max_retries": "Max retries",
+          "ack_timeout": "ACK timeout (sec)",
+          "push_enabled": "Send proactive updates"
+        },
+        "data_description": {
+          "port": "For serial: /dev/serial/by-id/... or /dev/ttyUSB0. For tcp: IP:port.",
+          "ack_timeout": "Must be less than the queue retry period."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rover — settings",
+        "description": "{last_action}",
+        "menu_options": {
+          "general": "General",
+          "devices": "Devices",
+          "users_menu": "Users",
+          "config_view": "Config (for copying to frontend)"
+        }
+      },
+      "general": {
+        "title": "General settings",
+        "data": {
+          "home_name": "Home name",
+          "conn_type": "Connection type",
+          "port": "Port or address",
+          "channel": "Meshtastic channel name",
+          "psk": "Channel key (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Queue retry period (sec)",
+          "max_retries": "Max retries",
+          "ack_timeout": "ACK timeout (sec)",
+          "push_enabled": "Send proactive updates"
+        }
+      },
+      "devices": {
+        "title": "Rover devices",
+        "description": "Select Home Assistant entities that Rover will control. Unchecking removes the device from Rover.",
+        "data": {
+          "entities": "Devices"
+        }
+      },
+      "users_menu": {
+        "title": "Users",
+        "description": "Current users: {users}",
+        "menu_options": {
+          "user_add": "Add user",
+          "user_remove": "Remove user"
+        }
+      },
+      "user_add": {
+        "title": "Add user",
+        "data": {
+          "name": "Name",
+          "password": "Password"
+        }
+      },
+      "user_remove": {
+        "title": "Remove user",
+        "data": {
+          "name": "Name"
+        }
+      },
+      "config_view": {
+        "title": "Current config",
+        "description": "Copy field contents for manual transfer to the frontend. Hashes in headers help verify version match.",
+        "data": {}
+      }
+    }
+  }
+}

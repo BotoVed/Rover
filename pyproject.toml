@@ -1,0 +1,22 @@
+[project]
+name = "rover"
+version = "0.1.11"
+description = "Rover — Remote Over Radio для Home Assistant"
+requires-python = ">=3.12"
+dependencies = [
+    "msgpack>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "voluptuous>=0.13",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["custom_components"]

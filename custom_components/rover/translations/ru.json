@@ -1,0 +1,88 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rover — установка",
+        "description": "Базовые настройки интеграции. Устройства, пользователи и просмотр конфига — в настройках после установки.",
+        "data": {
+          "home_name": "Имя дома",
+          "conn_type": "Тип подключения",
+          "port": "Порт или адрес",
+          "channel": "Имя канала Meshtastic",
+          "psk": "Ключ канала (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Период повторов очереди (сек)",
+          "max_retries": "Максимум повторов",
+          "ack_timeout": "Таймаут ACK (сек)",
+          "push_enabled": "Отправлять инициативные обновления"
+        },
+        "data_description": {
+          "port": "Для serial: /dev/serial/by-id/... или /dev/ttyUSB0. Для tcp: IP:порт.",
+          "ack_timeout": "Должен быть меньше периода повторов очереди."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rover — настройки",
+        "description": "{last_action}",
+        "menu_options": {
+          "general": "Общие",
+          "devices": "Устройства",
+          "users_menu": "Пользователи",
+          "config_view": "Конфиг (для копирования на фронт)"
+        }
+      },
+      "general": {
+        "title": "Общие настройки",
+        "data": {
+          "home_name": "Имя дома",
+          "conn_type": "Тип подключения",
+          "port": "Порт или адрес",
+          "channel": "Имя канала Meshtastic",
+          "psk": "Ключ канала (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Период повторов очереди (сек)",
+          "max_retries": "Максимум повторов",
+          "ack_timeout": "Таймаут ACK (сек)",
+          "push_enabled": "Отправлять инициативные обновления"
+        }
+      },
+      "devices": {
+        "title": "Устройства Rover",
+        "description": "Отметьте устройства Home Assistant, которыми Rover будет управлять. Снятие галочки удаляет устройство из Rover.",
+        "data": {
+          "entities": "Устройства"
+        }
+      },
+      "users_menu": {
+        "title": "Пользователи",
+        "description": "Текущие пользователи: {users}",
+        "menu_options": {
+          "user_add": "Добавить пользователя",
+          "user_remove": "Удалить пользователя"
+        }
+      },
+      "user_add": {
+        "title": "Добавить пользователя",
+        "data": {
+          "name": "Имя",
+          "password": "Пароль"
+        }
+      },
+      "user_remove": {
+        "title": "Удалить пользователя",
+        "data": {
+          "name": "Имя"
+        }
+      },
+      "config_view": {
+        "title": "Текущий конфиг",
+        "description": "Скопируйте содержимое полей для ручного переноса на фронт. Хеши в заголовках помогут проверить, что версии совпадают.",
+        "data": {}
+      }
+    }
+  }
+}

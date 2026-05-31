@@ -16,18 +16,23 @@
 
 ## Что внутри репозитория
 
-Rover — монорепо из трёх компонентов:
+Rover теперь разделён на три отдельных репозитория для совместимости с HACS:
 
-| Папка | Что это | Стек |
-|-------|---------|------|
-| [`back/`](./back) | Плагин Home Assistant, мост к шлюзу | Python |
-| [`app/`](./app) | Мобильное приложение | Android, Kotlin |
-| [`card/`](./card) | Карточка Lovelace для дашборда HA | TypeScript + LitElement |
+| Репозиторий | Что это | Стек |
+|-------------|---------|------|
+| **[Rover](https://github.com/BotoVed/Rover)** (этот) | Плагин Home Assistant — back | Python |
+| **[Rover-Card](https://github.com/BotoVed/Rover-Card)** | Карточка Lovelace для дашборда HA | TypeScript + LitElement |
+| **[Rover-App](https://github.com/BotoVed/Rover-App)** | Мобильное приложение Android | Kotlin |
 
-Общие документы — в корне:
+Общая документация остаётся в этом репозитории и применяется ко всем трём компонентам:
 
 - [`SPEC.md`](./SPEC.md) — спецификация протокола и системы
 - [`DECISIONS.md`](./DECISIONS.md) — журнал архитектурных решений
+
+Структура этого репозитория (после реструктуризации под HACS):
+- `custom_components/rover/` — код плагина (бэка)
+- `tests/` — юнит-тесты
+- `SPEC.md`, `DECISIONS.md` — общая документация
 
 ## Система не сдаётся
 
@@ -58,21 +63,20 @@ Rover — монорепо из трёх компонентов:
 
 ## Установка
 
-### Плагин Home Assistant (`back/`)
-1. Добавить репозиторий в HACS: `https://github.com/BotoVed/Rover`
-2. Установить Rover через HACS
-3. Перезапустить Home Assistant
-4. Settings → Integrations → Add → Rover
-5. Выбрать порт шлюза, настроить канал и устройства
+### Плагин Home Assistant
+1. HACS → Integrations → ⋮ → Custom repositories.
+2. Добавить `https://github.com/BotoVed/Rover` как **Integration**.
+3. Установить **Rover**, перезапустить Home Assistant.
+4. Settings → Devices & Services → Add → Rover.
 
-### Карточка Lovelace (`card/`)
-1. HACS → Frontend → добавить репозиторий → выбрать Rover Card
-2. На дашборде: Add Card → Custom: Rover Card
-3. Карточка покажет статус системы, подключённые телефоны и поток пакетов
+### Карточка Lovelace
+1. HACS → Frontend → ⋮ → Custom repositories.
+2. Добавить `https://github.com/BotoVed/Rover-Card` как **Dashboard**.
+3. Установить **Rover Card**, перезагрузить страницу.
 
-### Приложение (`app/`)
-APK сборки — в [Releases](https://github.com/BotoVed/Rover/releases).
-Или собрать самостоятельно — см. [`app/README.md`](./app/README.md).
+### Приложение Android
+APK — в [Releases репозитория Rover-App](https://github.com/BotoVed/Rover-App/releases).
+Или собрать из исходников — см. README в `Rover-App`.
 
 ## Поддерживаемые типы устройств
 
