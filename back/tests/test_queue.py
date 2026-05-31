@@ -1,113 +1,351 @@
-"""Юнит-тесты для queue.py."""
+"""Юнит-тесты для queue.py с ACK-механизмом."""
 
 from __future__ import annotations
-
-import pytest
 
 from rover.codec import MAX_PACKET_SIZE, decode
 from rover.queue import Batcher, InDedup, OutQueue
 
 
-# ---------- OutQueue: базовое поведение ----------
+# =====================================================================
+# OutQueue — базовое поведение
+# =====================================================================
 
-def test_put_and_get():
+def test_put_creates_active_item():
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5, "id": 1}, retries=5, period=15.0, now=100.0)
+    q.put(key=1, msg={"tp": 5, "id": 1}, max_retries=5, now=100.0)
     item = q.get(1)
     assert item is not None
-    assert item.msg == {"tp": 5, "id": 1}
+    assert item.phase == "active"
     assert item.retries_left == 5
-    assert item.next_send_time == 100.0  # первая отправка немедленно
+    assert item.max_retries == 5
+    assert item.next_send_time == 100.0
+    assert item.packet_id is None
+    assert item.sent_at is None
 
 
-def test_put_overwrites_same_key():
-    """Новая запись с тем же key полностью затирает старую, счётчик сбрасывается."""
+def test_put_overwrites_in_any_phase():
+    """Новый put затирает элемент независимо от его фазы."""
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5, "id": 1, "s": 0}, retries=5, period=15.0, now=100.0)
-    q.mark_sent(1, period=15.0, now=100.0)
-    assert q.get(1).retries_left == 4
+    # active
+    q.put(key=1, msg={"a": 1}, max_retries=5, now=100.0)
+    q.put(key=1, msg={"a": 2}, max_retries=5, now=200.0)
+    assert q.get(1).msg == {"a": 2}
+    assert q.get(1).next_send_time == 200.0
 
-    q.put(key=1, msg={"tp": 5, "id": 1, "s": 1}, retries=5, period=15.0, now=200.0)
-    item = q.get(1)
-    assert item.msg["s"] == 1
-    assert item.retries_left == 5
-    assert item.next_send_time == 200.0
+    # awaiting_ack
+    q.mark_sent(1, packet_id=999, now=200.0)
+    assert q.get(1).phase == "awaiting_ack"
+    q.put(key=1, msg={"a": 3}, max_retries=5, now=300.0)
+    assert q.get(1).phase == "active"
+    assert q.get(1).msg == {"a": 3}
+    assert q.get(1).retries_left == 5
+
+    # suspended
+    q2 = OutQueue()
+    q2.put(key="k", msg={"x": 1}, max_retries=1, now=0.0)
+    q2.mark_sent("k", packet_id=1, now=0.0)
+    q2.on_nak(1, period=15.0, now=1.0)
+    assert q2.get("k").phase == "suspended"
+    q2.put(key="k", msg={"x": 2}, max_retries=3, now=100.0)
+    assert q2.get("k").phase == "active"
+    assert q2.get("k").retries_left == 3
 
 
-def test_remove():
+def test_remove_and_contains():
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5}, retries=5, period=15.0, now=0.0)
+    q.put(key=1, msg={"tp": 5}, max_retries=5, now=0.0)
+    assert 1 in q
     assert q.remove(1) is True
     assert 1 not in q
     assert q.remove(1) is False
 
 
-def test_len_and_contains():
+def test_len():
     q = OutQueue()
     assert len(q) == 0
-    q.put(key=1, msg={"tp": 5}, retries=5, period=15.0, now=0.0)
-    q.put(key=2, msg={"tp": 5}, retries=5, period=15.0, now=0.0)
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.put(key=2, msg={}, max_retries=5, now=0.0)
     assert len(q) == 2
-    assert 1 in q
-    assert 3 not in q
 
 
-# ---------- OutQueue: сортировка и mark_sent ----------
+# =====================================================================
+# Фазы и переходы
+# =====================================================================
 
-def test_sorted_by_next_send_time():
+def test_active_items_filter():
     q = OutQueue()
-    q.put(key="a", msg={"tp": 5}, retries=5, period=15.0, now=100.0)
-    q.put(key="b", msg={"tp": 5}, retries=5, period=15.0, now=50.0)
-    q.put(key="c", msg={"tp": 5}, retries=5, period=15.0, now=200.0)
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.put(key=2, msg={}, max_retries=5, now=0.0)
+    q.mark_sent(2, packet_id=10, now=0.0)
+    assert {i.key for i in q.active_items()} == {1}
+    assert {i.key for i in q.awaiting_ack_items()} == {2}
 
-    sorted_keys = [i.key for i in q.sorted_items()]
-    assert sorted_keys == ["b", "a", "c"]
 
-
-def test_ready_items_filters_by_time():
+def test_ready_items_filter():
     q = OutQueue()
-    q.put(key="a", msg={"tp": 5}, retries=5, period=15.0, now=100.0)
-    q.mark_sent("a", period=15.0, now=100.0)
-
-    assert q.ready_items(now=110.0) == []
-    ready = q.ready_items(now=120.0)
-    assert len(ready) == 1
-    assert ready[0].key == "a"
+    q.put(key="a", msg={}, max_retries=5, now=50.0)
+    q.put(key="b", msg={}, max_retries=5, now=200.0)
+    keys = [i.key for i in q.ready_items(now=100.0)]
+    assert keys == ["a"]
 
 
-def test_mark_sent_updates_time_and_retries():
+def test_ready_items_excludes_awaiting_ack():
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5}, retries=3, period=15.0, now=100.0)
-    q.mark_sent(1, period=15.0, now=100.0)
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.mark_sent(1, packet_id=10, now=0.0)
+    assert q.ready_items(now=100.0) == []
 
+
+def test_ready_items_excludes_suspended():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=1, now=0.0)
+    q.mark_sent(1, packet_id=10, now=0.0)
+    q.on_nak(10, period=15.0, now=1.0)
+    assert q.ready_items(now=1000.0) == []
+
+
+# =====================================================================
+# mark_sent
+# =====================================================================
+
+def test_mark_sent_transitions_to_awaiting_ack():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=5, now=100.0)
+    q.mark_sent(1, packet_id=42, now=100.0)
     item = q.get(1)
+    assert item.phase == "awaiting_ack"
+    assert item.packet_id == 42
+    assert item.sent_at == 100.0
+    assert item.retries_left == 4
+
+
+def test_mark_sent_ignores_non_active():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.mark_sent(1, packet_id=10, now=0.0)
+    q.mark_sent(1, packet_id=20, now=1.0)
+    assert q.get(1).packet_id == 10
+
+
+def test_mark_sent_unknown_key_is_noop():
+    q = OutQueue()
+    q.mark_sent("unknown", packet_id=1, now=0.0)
+
+
+# =====================================================================
+# on_ack
+# =====================================================================
+
+def test_on_ack_removes_item():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.mark_sent(1, packet_id=42, now=0.0)
+    removed_key = q.on_ack(42)
+    assert removed_key == 1
+    assert 1 not in q
+
+
+def test_on_ack_unknown_packet_id_returns_none():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=5, now=0.0)
+    q.mark_sent(1, packet_id=42, now=0.0)
+    assert q.on_ack(999) is None
+    assert q.get(1) is not None
+
+
+def test_on_ack_for_overwritten_item_is_noop():
+    q = OutQueue()
+    q.put(key=1, msg={"v": 1}, max_retries=5, now=0.0)
+    q.mark_sent(1, packet_id=42, now=0.0)
+    q.put(key=1, msg={"v": 2}, max_retries=5, now=100.0)
+    result = q.on_ack(42)
+    assert result is None
+    assert q.get(1).msg == {"v": 2}
+    assert q.get(1).phase == "active"
+
+
+# =====================================================================
+# on_nak
+# =====================================================================
+
+def test_on_nak_retries_when_retries_left():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=3, now=100.0)
+    q.mark_sent(1, packet_id=42, now=100.0)
+    q.on_nak(42, period=15.0, now=105.0)
+    item = q.get(1)
+    assert item.phase == "active"
+    assert item.next_send_time == 105.0 + 15.0
+    assert item.packet_id is None
+    assert item.sent_at is None
     assert item.retries_left == 2
-    assert item.next_send_time == 115.0
 
 
-def test_mark_sent_removes_when_retries_exhausted():
+def test_on_nak_suspends_when_retries_exhausted():
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5}, retries=2, period=15.0, now=100.0)
-    q.mark_sent(1, period=15.0, now=100.0)
+    q.put(key=1, msg={}, max_retries=1, now=100.0)
+    q.mark_sent(1, packet_id=42, now=100.0)
+    q.on_nak(42, period=15.0, now=105.0)
+    item = q.get(1)
+    assert item.phase == "suspended"
+
+
+def test_on_nak_unknown_packet_id_returns_none():
+    q = OutQueue()
+    assert q.on_nak(999, period=15.0, now=0.0) is None
+
+
+# =====================================================================
+# check_ack_timeouts
+# =====================================================================
+
+def test_ack_timeout_triggers_retry():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=3, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
+    assert q.check_ack_timeouts(ack_timeout=10.0, period=15.0, now=105.0) == []
+    processed = q.check_ack_timeouts(ack_timeout=10.0, period=15.0, now=115.0)
+    assert processed == [1]
+    assert q.get(1).phase == "active"
+    assert q.get(1).next_send_time == 115.0 + 15.0
+
+
+def test_ack_timeout_suspends_when_retries_exhausted():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=1, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
+    q.check_ack_timeouts(ack_timeout=10.0, period=15.0, now=115.0)
+    assert q.get(1).phase == "suspended"
+
+
+def test_ack_timeout_processes_multiple_items():
+    q = OutQueue()
+    q.put(key="a", msg={}, max_retries=3, now=100.0)
+    q.put(key="b", msg={}, max_retries=3, now=100.0)
+    q.mark_sent("a", packet_id=1, now=100.0)
+    q.mark_sent("b", packet_id=2, now=100.0)
+    processed = q.check_ack_timeouts(ack_timeout=10.0, period=15.0, now=115.0)
+    assert set(processed) == {"a", "b"}
+
+
+def test_ack_timeout_ignores_active_and_suspended():
+    q = OutQueue()
+    q.put(key="a", msg={}, max_retries=5, now=0.0)
+    q.put(key="b", msg={}, max_retries=1, now=0.0)
+    q.mark_sent("b", packet_id=10, now=0.0)
+    q.on_nak(10, period=15.0, now=1.0)
+    processed = q.check_ack_timeouts(ack_timeout=10.0, period=15.0, now=1000.0)
+    assert processed == []
+
+
+# =====================================================================
+# wake_suspended
+# =====================================================================
+
+def test_wake_suspended_transitions_to_active():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=1, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
+    q.on_nak(10, period=15.0, now=105.0)
+    assert q.get(1).phase == "suspended"
+    woken = q.wake_suspended(now=500.0)
+    assert woken == [1]
+    item = q.get(1)
+    assert item.phase == "active"
+    assert item.next_send_time == 500.0
+    assert item.retries_left == 1
+    assert item.packet_id is None
+    assert item.sent_at is None
+
+
+def test_wake_suspended_ignores_active_and_awaiting():
+    q = OutQueue()
+    q.put(key="a", msg={}, max_retries=5, now=0.0)
+    q.put(key="b", msg={}, max_retries=5, now=0.0)
+    q.mark_sent("b", packet_id=10, now=0.0)
+    woken = q.wake_suspended(now=100.0)
+    assert woken == []
+    assert q.get("a").phase == "active"
+    assert q.get("b").phase == "awaiting_ack"
+
+
+def test_wake_suspended_wakes_multiple():
+    q = OutQueue()
+    for k in ["a", "b", "c"]:
+        q.put(key=k, msg={}, max_retries=1, now=0.0)
+        q.mark_sent(k, packet_id=hash(k), now=0.0)
+        q.on_nak(hash(k), period=15.0, now=1.0)
+    assert all(q.get(k).phase == "suspended" for k in ["a", "b", "c"])
+    woken = q.wake_suspended(now=100.0)
+    assert set(woken) == {"a", "b", "c"}
+    assert all(q.get(k).phase == "active" for k in ["a", "b", "c"])
+    assert all(q.get(k).retries_left == 1 for k in ["a", "b", "c"])
+
+
+def test_wake_suspended_uses_remembered_max_retries():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=7, now=0.0)
+    q.mark_sent(1, packet_id=10, now=0.0)
+    for i in range(7):
+        q.check_ack_timeouts(ack_timeout=1.0, period=2.0, now=2.0 + i * 4.0)
+        item = q.get(1)
+        if item.phase != "suspended":
+            q.mark_sent(1, packet_id=10 + i + 1, now=item.next_send_time)
+    assert q.get(1).phase == "suspended"
+    q.wake_suspended(now=1000.0)
+    assert q.get(1).retries_left == 7
+
+
+# =====================================================================
+# Полный сценарий
+# =====================================================================
+
+def test_full_lifecycle_ack():
+    q = OutQueue()
+    q.put(key=1, msg={"v": 1}, max_retries=5, now=100.0)
+    q.mark_sent(1, packet_id=42, now=101.0)
+    assert q.on_ack(42) == 1
+    assert 1 not in q
+
+
+def test_full_lifecycle_nak_retry_ack():
+    q = OutQueue()
+    q.put(key=1, msg={}, max_retries=3, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
+    q.on_nak(10, period=15.0, now=105.0)
+    assert q.get(1).phase == "active"
+    q.mark_sent(1, packet_id=20, now=115.0)
     assert q.get(1).retries_left == 1
+    q.on_ack(20)
+    assert 1 not in q
 
-    q.mark_sent(1, period=15.0, now=115.0)
-    assert q.get(1) is None
 
-
-def test_mark_sent_after_remove_is_noop():
+def test_full_lifecycle_exhaust_to_suspended_then_wake():
     q = OutQueue()
-    q.mark_sent("nope", period=15.0, now=0.0)
+    q.put(key=1, msg={}, max_retries=2, now=0.0)
+    q.mark_sent(1, packet_id=1, now=0.0)
+    q.on_nak(1, period=15.0, now=1.0)
+    q.mark_sent(1, packet_id=2, now=15.0)
+    q.on_nak(2, period=15.0, now=16.0)
+    assert q.get(1).phase == "suspended"
+    q.wake_suspended(now=100.0)
+    assert q.get(1).phase == "active"
+    assert q.get(1).retries_left == 2
+    q.mark_sent(1, packet_id=99, now=101.0)
+    q.on_ack(99)
+    assert 1 not in q
 
 
-# ---------- InDedup ----------
+# =====================================================================
+# InDedup
+# =====================================================================
 
-def test_dedup_first_seen_is_false():
+def test_dedup_first_seen_false():
     d = InDedup()
     assert d.seen("msg-1", now=100.0) is False
 
 
-def test_dedup_second_seen_is_true():
+def test_dedup_second_seen_true():
     d = InDedup()
     d.seen("msg-1", now=100.0)
     assert d.seen("msg-1", now=200.0) is True
@@ -124,43 +362,39 @@ def test_dedup_cleanup():
     d.seen("a", now=100.0)
     d.seen("b", now=100.0)
     d.seen("c", now=500.0)
-    removed = d.cleanup(now=800.0)
-    assert removed == 2
+    assert d.cleanup(now=800.0) == 2
     assert len(d) == 1
     assert d.seen("c", now=800.0) is True
 
 
 def test_dedup_repeat_refreshes_timestamp():
-    """Повторное обращение к тому же ID освежает его окно."""
     d = InDedup(window=600.0)
     d.seen("a", now=100.0)
     assert d.seen("a", now=500.0) is True
     assert d.seen("a", now=900.0) is True
-    assert d.seen("a", now=1600.0) is False  # 900+600=1500 < 1600
+    assert d.seen("a", now=1600.0) is False
 
 
-# ---------- Batcher ----------
+# =====================================================================
+# Batcher
+# =====================================================================
 
 def test_batcher_empty_queue():
-    q = OutQueue()
-    batch = Batcher().build_batch(q, now=100.0)
-    assert batch.packets == []
-    assert batch.sent_keys == []
+    assert Batcher().build_batch(OutQueue(), now=100.0).packets == []
 
 
-def test_batcher_single_small_message():
+def test_batcher_single_small():
     q = OutQueue()
-    q.put(key=1, msg={"tp": 5, "id": 1, "s": 1}, retries=5, period=15.0, now=100.0)
+    q.put(key=1, msg={"tp": 5, "id": 1}, max_retries=5, now=100.0)
     batch = Batcher().build_batch(q, now=100.0)
     assert len(batch.packets) == 1
     assert batch.sent_keys == [1]
 
 
-def test_batcher_combines_small_messages():
-    """Несколько мелких сообщений склеиваются в один пакет."""
+def test_batcher_combines_small():
     q = OutQueue()
     for i in range(5):
-        q.put(key=i, msg={"tp": 5, "id": i, "s": i % 2}, retries=5, period=15.0, now=100.0)
+        q.put(key=i, msg={"tp": 5, "id": i}, max_retries=5, now=100.0)
     batch = Batcher().build_batch(q, now=100.0)
     assert len(batch.packets) == 1
     assert len(batch.sent_keys) == 5
@@ -168,64 +402,47 @@ def test_batcher_combines_small_messages():
 
 
 def test_batcher_skips_oversized_when_batch_not_empty():
-    """SB-027: большое сообщение пропускается, если пачка уже не пуста."""
     q = OutQueue()
-    q.put(key="small", msg={"tp": 5, "id": 1}, retries=5, period=15.0, now=50.0)
-    big = {"tp": 4, "s": "dev", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
-    q.put(key="big", msg=big, retries=5, period=15.0, now=100.0)
-
+    q.put(key="small", msg={"tp": 5, "id": 1}, max_retries=5, now=50.0)
+    big = {"tp": 4, "s": "d", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
+    q.put(key="big", msg=big, max_retries=5, now=100.0)
     batch = Batcher().build_batch(q, now=200.0)
     assert "small" in batch.sent_keys
     assert "big" not in batch.sent_keys
 
 
 def test_batcher_fragments_oversized_when_batch_empty():
-    """SB-027: большое сообщение в пустой пачке — фрагментируется, пачка закрывается."""
     q = OutQueue()
-    big = {"tp": 4, "s": "dev", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
-    q.put(key="big", msg=big, retries=5, period=15.0, now=100.0)
-
+    big = {"tp": 4, "s": "d", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
+    q.put(key="big", msg=big, max_retries=5, now=100.0)
     batch = Batcher().build_batch(q, now=200.0)
     assert batch.sent_keys == ["big"]
     assert len(batch.packets) > 1
-
     for pkt in batch.packets:
         assert len(pkt) <= MAX_PACKET_SIZE
-        decoded = decode(pkt)
-        assert decoded["tp"] == 7
+        assert decode(pkt)["tp"] == 7
 
 
-def test_batcher_does_not_take_after_fragmentation():
-    """После фрагментации больше ничего в пачку не добавляется."""
+def test_batcher_excludes_awaiting_ack():
     q = OutQueue()
-    big = {"tp": 4, "s": "dev", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
-    q.put(key="big", msg=big, retries=5, period=15.0, now=100.0)
-    q.put(key="small", msg={"tp": 5, "id": 1}, retries=5, period=15.0, now=150.0)
-
+    q.put(key=1, msg={"tp": 5, "id": 1}, max_retries=5, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
     batch = Batcher().build_batch(q, now=200.0)
-    assert batch.sent_keys == ["big"]
+    assert batch.packets == []
+    assert batch.sent_keys == []
 
 
-def test_batcher_takes_next_small_after_skipping_oversized():
-    """Если после первого мелкого встретилось большое — пропустим, возьмём следующее мелкое."""
+def test_batcher_excludes_suspended():
     q = OutQueue()
-    q.put(key="a", msg={"tp": 5, "id": 1}, retries=5, period=15.0, now=50.0)
-    big = {"tp": 4, "s": "dev", "d": [{"id": i, "n": "x" * 50} for i in range(20)]}
-    q.put(key="big", msg=big, retries=5, period=15.0, now=100.0)
-    q.put(key="b", msg={"tp": 5, "id": 2}, retries=5, period=15.0, now=150.0)
-
-    batch = Batcher().build_batch(q, now=200.0)
-    assert "a" in batch.sent_keys
-    assert "b" in batch.sent_keys
-    assert "big" not in batch.sent_keys
-    assert len(batch.packets) == 1
+    q.put(key=1, msg={"tp": 5, "id": 1}, max_retries=1, now=100.0)
+    q.mark_sent(1, packet_id=10, now=100.0)
+    q.on_nak(10, period=15.0, now=101.0)
+    batch = Batcher().build_batch(q, now=1000.0)
+    assert batch.packets == []
 
 
-def test_batcher_ignores_not_ready_items():
-    """Элементы с next_send_time > now не попадают в пачку."""
+def test_batcher_ignores_future_active():
     q = OutQueue()
-    q.put(key="ready", msg={"tp": 5, "id": 1}, retries=5, period=15.0, now=50.0)
-    q.put(key="future", msg={"tp": 5, "id": 2}, retries=5, period=15.0, now=500.0)
-
+    q.put(key=1, msg={"tp": 5}, max_retries=5, now=500.0)
     batch = Batcher().build_batch(q, now=100.0)
-    assert batch.sent_keys == ["ready"]
+    assert batch.packets == []

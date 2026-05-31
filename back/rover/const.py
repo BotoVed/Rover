@@ -158,3 +158,7 @@ DEFAULT_CHANNEL = "LongFast"
 DEFAULT_PSK = "AQ=="
 DEFAULT_HOME_NAME = "Мой дом"
 DEFAULT_PUSH_ENABLED = True
+
+# ---------- Параметры очереди (дефолты, переопределяются в config) ----------
+
+DEFAULT_ACK_TIMEOUT = 10        # сек, ожидание ACK после отправки
