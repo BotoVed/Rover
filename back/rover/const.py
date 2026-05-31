@@ -118,3 +118,25 @@ DEFAULT_HOP_LIMIT = 0               # прямая связь
 
 MESHTASTIC_PRIVATE_APP_PORT = 256
 MESHTASTIC_BROADCAST_ADDR = 0xFFFFFFFF
+
+# ---------- HA integration ----------
+
+DOMAIN = "rover"
+
+# Ключи конфига для config_flow
+CONF_PORT = "port"                   # путь к устройству или TCP-адрес
+CONF_CONN_TYPE = "conn_type"         # "serial" или "tcp"
+CONF_CHANNEL = "channel"             # имя приватного канала Meshtastic
+CONF_PSK = "psk"                     # ключ канала (base64)
+CONF_HOME_NAME = "home_name"         # отображаемое имя дома (для META)
+CONF_HOP_LIMIT = "hop_limit"         # 0..7
+CONF_QUEUE_PERIOD = "queue_period"   # период повторов очереди, сек
+CONF_MAX_RETRIES = "max_retries"     # максимум повторов
+CONF_PUSH_ENABLED = "push_enabled"   # включена ли инициативная отправка PUSH
+
+# Дефолты для config_flow (если значения не заданы пользователем)
+DEFAULT_CONN_TYPE = "serial"
+DEFAULT_CHANNEL = "LongFast"
+DEFAULT_PSK = "AQ=="
+DEFAULT_HOME_NAME = "Мой дом"
+DEFAULT_PUSH_ENABLED = True

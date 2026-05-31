@@ -1,15 +1,19 @@
 [project]
 name = "rover"
-version = "0.1.6"
+version = "0.1.7"
 description = "Rover — Remote Over Radio для Home Assistant"
 requires-python = ">=3.12"
 dependencies = [
     "msgpack>=1.0",
 ]
 
+[tool.setuptools.packages.find]
+include = ["rover", "rover.*"]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "voluptuous>=0.13",
 ]
 
 [tool.ruff]

@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rover — basic setup",
+        "description": "Home name and Meshtastic gateway connection.",
+        "data": {
+          "home_name": "Home name",
+          "conn_type": "Connection type",
+          "port": "Port or address"
+        },
+        "data_description": {
+          "port": "For serial: /dev/serial/by-id/... or /dev/ttyUSB0. For tcp: IP:port."
+        }
+      },
+      "advanced": {
+        "title": "Rover — radio settings",
+        "description": "Meshtastic channel, queue parameters and retries.",
+        "data": {
+          "channel": "Meshtastic channel name",
+          "psk": "Channel pre-shared key (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Queue retry period (seconds)",
+          "max_retries": "Max retries",
+          "push_enabled": "Send proactive updates (PUSH)"
+        }
+      }
+    }
+  }
+}
