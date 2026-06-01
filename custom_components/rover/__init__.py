@@ -19,14 +19,13 @@ from .const import (
     DEFAULT_MAX_RETRIES,
     DEFAULT_QUEUE_PERIOD,
     DOMAIN,
-    HA_DOMAIN_TO_DEV_TYPE,
     TP_FRAGMENT,
 )
 from .dispatcher import Dispatcher
 from .handlers import Handlers
 from .ha_bridge import HaBridge
 from .queue import Batcher, InDedup, OutQueue
-from .registry import Area, Registry
+from .registry import Registry
 from .transport import Transport
 
 if TYPE_CHECKING:
@@ -146,10 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = config.get(CONF_PORT)
     await transport.connect(conn_type, port)
 
-    await _register_all_devices(hass, registry)
-
-    entity_ids = [d.entity_id for d in registry.all_devices()]
-    ha_bridge.start_tracking(entity_ids)
+    # Реестр пуст — пользователь добавляет устройства через options_flow
+    ha_bridge.start_tracking([])
     await ha_bridge.start_registry_listeners()
 
     home_name = config.get("home_name", "Rover")
@@ -216,39 +213,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     data.registry.save(registry_path)
 
     return True
-
-
-async def _register_all_devices(
-    hass: HomeAssistant,
-    registry: Registry,
-) -> None:
-    from homeassistant.helpers import area_registry as ar, entity_registry as er
-
-    ent_reg = er.async_get(hass)
-    area_reg = ar.async_get(hass)
-
-    area_map = {}
-    for area in area_reg.async_list_areas():
-        area_map[area.id] = area
-
-    for entity in list(ent_reg.entities.values()):
-        if entity.disabled_by or entity.hidden_by:
-            continue
-        domain = entity.entity_id.split(".")[0]
-        if domain not in HA_DOMAIN_TO_DEV_TYPE:
-            continue
-        area_name = None
-        if entity.area_id and entity.area_id in area_map:
-            area_name = area_map[entity.area_id].name
-        try:
-            registry.register(
-                entity_id=entity.entity_id,
-                domain=domain,
-                name=entity.name or entity.original_name or entity.entity_id,
-                area=area_name,
-            )
-        except ValueError:
-            continue
 
 
 @dataclass
