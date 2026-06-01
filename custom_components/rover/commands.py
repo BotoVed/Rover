@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from rover.const import (
+from .const import (
     DEV_ALARM,
     DEV_BUTTON,
     DEV_CLIMATE,
@@ -23,7 +23,7 @@ from rover.const import (
     DEV_SWITCH,
     DEV_WATER_HEATER,
 )
-from rover.registry import Device
+from .registry import Device
 
 
 @dataclass

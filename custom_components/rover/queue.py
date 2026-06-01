@@ -23,8 +23,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Hashable, Literal
 
-from rover.codec import MAX_PACKET_SIZE, encode, fragment
-from rover.const import (
+from .codec import MAX_PACKET_SIZE, encode, fragment
+from .const import (
     DEFAULT_ACK_TIMEOUT,
     DEFAULT_MAX_RETRIES,
     DEFAULT_QUEUE_PERIOD,

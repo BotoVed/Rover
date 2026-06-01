@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from rover.const import (
+from .const import (
     DEV_ALARM,
     DEV_BINARY_SENSOR,
     DEV_BUTTON,
@@ -34,7 +34,7 @@ from rover.const import (
     DEV_SWITCH,
     DEV_WATER_HEATER,
 )
-from rover.registry import Device
+from .registry import Device
 
 # Cостояния HA, при которых не выгружаем поля (см. п.1 обсуждения)
 _INVALID_STATES = {"unknown", "unavailable", None}
