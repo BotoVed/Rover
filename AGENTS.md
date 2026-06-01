@@ -6,6 +6,30 @@
 - `hacs.json` already has `zip_release: true` and `filename: "rover.zip"`
 - Local git is clean, committed, and pushed to `main`
 
+## Подключение к HAOS
+
+Хост для тестирования — Home Assistant OS (192.168.1.114, порт 222).
+
+```bash
+sshpass -p '$HAOS_PASS' ssh -o StrictHostKeyChecking=no \
+  -o UserKnownHostsFile=/dev/null -p $HAOS_PORT \
+  $HAOS_USER@$HAOS_HOST "<command>"
+```
+
+Креды в `.env`:
+```
+HAOS_HOST=192.168.1.114
+HAOS_PORT=222
+HAOS_USER=root
+HAOS_PASS=775Ho
+```
+
+Типичные команды:
+- `ls -la /config/custom_components/rover/` — проверить файлы интеграции
+- `ha core logs | grep -i rover` — логи HA по rover
+- `ha core restart` — перезагрузить HA
+- `cat /config/custom_components/rover/manifest.json` — версия интеграции
+
 ## Создание релиза (для HACS)
 
 При каждом повышении минорной версии (`x.y.0 → x.(y+1).0`) или при необходимости обновить HACS-пакет:
@@ -42,7 +66,7 @@ cd ../..
 unzip -l rover.zip | head -30
 ```
 
-Должен содержать файлы в корне (без папки `rover/`):
+Должен содержать файлы в корне:
 ```
 __init__.py
 manifest.json
@@ -52,44 +76,6 @@ config_flow.py
 options_flow.py
 brand/icon.png
 translations/en.json
-...
-```
-
-Проверка содержимого:
-
-```bash
-unzip -l rover.zip | head -30
-```
-
-Должен содержать файлы в корне (без папки `rover/`):
-```
-__init__.py
-manifest.json
-const.py
-codec.py
-config_flow.py
-options_flow.py
-brand/icon.png
-translations/en.json
-...
-```
-
-Проверка содержимого:
-
-```bash
-unzip -l rover.zip | head -30
-```
-
-Должен содержать:
-```
-rover/__init__.py
-rover/manifest.json
-rover/const.py
-rover/codec.py
-rover/config_flow.py
-rover/options_flow.py
-rover/brand/icon.png
-rover/translations/en.json
 ...
 ```
 
@@ -107,7 +93,7 @@ git push origin X.Y.Z
 ```bash
 # Создать Release
 RESPONSE=$(curl -X POST \
-  -H "Authorization: token <PAT>" \
+  -H "Authorization: token $GITHUB_TOKEN" \
   -H "Accept: application/vnd.github+json" \
   https://api.github.com/repos/BotoVed/Rover/releases \
   -d '{
@@ -126,9 +112,9 @@ UPLOAD_URL=$(echo "$RESPONSE" | grep '"upload_url"' | sed 's/.*"upload_url": "//
 
 ```bash
 curl -X POST \
-  -H "Authorization: token <PAT>" \
+  -H "Authorization: token $GITHUB_TOKEN" \
   -H "Content-Type: application/zip" \
-  "${UPLOAD_URL}?name=rover.zip&label=rover.zip" \
+  "${UPLOAD_URL}?name=rover.zip" \
   --data-binary @rover.zip
 ```
 
@@ -142,11 +128,13 @@ rm rover.zip
 
 - https://github.com/BotoVed/Rover/releases — видим релиз с прикреплённым `rover.zip`.
 - В HACS: удалить и заново добавить `BotoVed/Rover` → при установке выбрать версию → должно скачаться без ошибок.
+- На HAOS: `ls -la /config/custom_components/rover/` — файлы без двойной вложенности.
 
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| HACS downloads `1df2c31.zip` / 404 | Release tag name doesn't match `manifest.json` version | Create release with tag matching `version` field exactly |
-| HACS downloads `38b32a1.zip` / branch 404 | Same — tag mismatch | Same |
-| `RequirementsNotFound: meshtastic==X.Y.Z` | Either PyPI version doesn't exist, or files weren't downloaded | Bump to existing version; check HACS download succeeded first |
+| HACS 404 / download as `1df2c31.zip` | Release tag name doesn't match `manifest.json` version | Create release with tag matching `version` field exactly |
+| Files in `rover/rover/` (double nesting) | ZIP built with `rover/` prefix | Rebuild from inside `custom_components/rover/` — files flat |
+| `No module named 'rover'` | Absolute imports `from rover.xxx` | Use relative imports `from .xxx` |
+| `RequirementsNotFound: meshtastic==X.Y.Z` | PyPI version missing or download failed | Bump to existing version; check HACS download first |
