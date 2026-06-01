@@ -186,14 +186,12 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 self._last_action = f"Добавлено устройств: {added_count}"
                 return await self.async_step_init()
 
-            registered = {d.entity_id for d in registry.all_devices()}
             schema = vol.Schema({
-                vol.Required("entities", default=[]):
+                vol.Optional("entities", default=[]):
                     selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=SUPPORTED_DOMAINS,
                             multiple=True,
-                            exclude_entities=list(registered),
                         )
                     ),
             })

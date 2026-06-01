@@ -94,8 +94,8 @@
         }
       },
       "devices": {
-        "title": "Устройства Rover",
-        "description": "Отметьте устройства Home Assistant, которыми Rover будет управлять. Снятие галочки удаляет устройство из Rover.",
+        "title": "Добавить устройства",
+        "description": "Выберите устройства Home Assistant для добавления в Rover.",
         "data": {
           "entities": "Устройства"
         }
