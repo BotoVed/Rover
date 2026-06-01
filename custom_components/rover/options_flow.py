@@ -171,12 +171,8 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
 
             if user_input is not None:
                 selected = set(user_input.get("entities", []))
-                current = {d.entity_id for d in registry.all_devices()}
-
-                to_add = selected - current
-                to_remove = current - selected
-
-                for entity_id in to_add:
+                added_count = 0
+                for entity_id in selected:
                     state = self.hass.states.get(entity_id)
                     if state is None:
                         continue
@@ -185,30 +181,19 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                     area = state.attributes.get("area_id")
                     unit = state.attributes.get("unit_of_measurement")
                     registry.register(entity_id, domain, name, area=area, unit=unit)
+                    added_count += 1
 
-                for entity_id in to_remove:
-                    registry.remove_device_by_entity_id(entity_id)
-
-                added = len(to_add)
-                removed = len(to_remove)
-                parts = []
-                if added:
-                    parts.append(f"добавлено {added}")
-                if removed:
-                    parts.append(f"удалено {removed}")
-                self._last_action = (
-                    "Устройства: " + ", ".join(parts) if parts else "Устройства без изменений"
-                )
-
+                self._last_action = f"Добавлено устройств: {added_count}"
                 return await self.async_step_init()
 
-            current_entity_ids = [d.entity_id for d in registry.all_devices()]
+            registered = {d.entity_id for d in registry.all_devices()}
             schema = vol.Schema({
-                vol.Required("entities", default=current_entity_ids):
+                vol.Required("entities", default=[]):
                     selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=SUPPORTED_DOMAINS,
                             multiple=True,
+                            exclude_entities=list(registered),
                         )
                     ),
             })

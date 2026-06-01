@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 _LOGGER = logging.getLogger(__name__)
 
