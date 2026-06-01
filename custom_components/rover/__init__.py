@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.event import async_track_time_interval
 
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 
 _LOGGER = logging.getLogger(__name__)
 
