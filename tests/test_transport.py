@@ -17,7 +17,18 @@ def transport():
     return Transport()
 
 
-def _make_packet(portnum: int, data: bytes | None = None, from_id: int = 1) -> MagicMock:
+def _make_packet(portnum: int, data: bytes | None = None, from_id: int = 1) -> dict:
+    return {
+        "decoded": {
+            "portnum": portnum,
+            "payload": data,
+        },
+        "from": from_id,
+    }
+
+
+def _make_legacy_packet(portnum: int, data: bytes | None = None, from_id: int = 1) -> MagicMock:
+    """Legacy MagicMock-формат для тестов, где callback принимает attribute-объект."""
     decoded = MagicMock()
     decoded.portnum = portnum
     decoded.data = data
@@ -27,17 +38,17 @@ def _make_packet(portnum: int, data: bytes | None = None, from_id: int = 1) -> M
     return packet
 
 
-def _make_routing_packet(request_id: int, error: bool = False) -> MagicMock:
-    routing = MagicMock()
-    routing.requestId = request_id
-    routing.error = "some_error" if error else None
-    decoded = MagicMock()
-    decoded.portnum = 5  # PortNum.ROUTING_APP
-    decoded.routing = routing
-    packet = MagicMock()
-    packet.decoded = decoded
-    packet.fromId = 1
-    return packet
+def _make_routing_packet(request_id: int, error: bool = False) -> dict:
+    return {
+        "decoded": {
+            "portnum": 5,
+            "routing": {
+                "requestId": request_id,
+                "error": "some_error" if error else None,
+            },
+        },
+        "from": 1,
+    }
 
 
 class TestConnect:

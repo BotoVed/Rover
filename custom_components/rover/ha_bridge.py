@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 
 from homeassistant.core import HomeAssistant, State, callback
@@ -69,7 +70,9 @@ class HaBridge:
         entity_id = event.data.get("entity_id")
         new_state = event.data.get("new_state")
         if entity_id and new_state and entity_id in self._tracked_entities and self._on_state_changed:
-            self._on_state_changed(entity_id, new_state)
+            result = self._on_state_changed(entity_id, new_state)
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
 
     async def start_registry_listeners(self) -> None:
         unsub = self._hass.bus.async_listen(
@@ -83,7 +86,9 @@ class HaBridge:
 
     def _handle_registry_event(self, event: Any) -> None:
         if self._on_registry_changed:
-            self._on_registry_changed()
+            result = self._on_registry_changed()
+            if asyncio.iscoroutine(result):
+                asyncio.create_task(result)
 
     @property
     def entity_registry(self):

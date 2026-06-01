@@ -28,12 +28,14 @@ from .queue import Batcher, InDedup, OutQueue
 from .registry import Registry
 from .transport import Transport
 
+from homeassistant.config_entries import ConfigEntryNotReady
+
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
     from homeassistant.core import HomeAssistant
     from homeassistant.helpers.event import async_track_time_interval
 
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -50,6 +52,8 @@ def _make_on_packet(
         except Exception:
             _LOGGER.exception("Failed to decode incoming packet")
             return
+
+        _LOGGER.info("Packet from node %s: %s", from_node, packet)
 
         tp = packet.get("tp")
 
@@ -88,18 +92,24 @@ async def _send_cycle(
     batcher: Batcher,
     transport: Transport,
 ) -> None:
+    """Один цикл отправки: собрать пачку → отправить → пометить."""
     now = time.monotonic()
-    while True:
-        batch = batcher.build_batch(out_queue, now=now)
-        if not batch.packets:
-            break
-        for raw_bytes in batch.packets:
-            packet_id = await transport.send(raw_bytes)
-            if packet_id is None:
-                return
-            for key in batch.sent_keys:
-                out_queue.mark_sent(key, packet_id, now=now)
+    batch = batcher.build_batch(out_queue, now=now)
+    if not batch.packets:
+        return
+
+    last_packet_id = None
+    for raw_bytes in batch.packets:
+        packet_id = await transport.send(raw_bytes)
+        if packet_id is None:
+            _LOGGER.warning("Send cycle: transport.send returned None, aborting batch")
+            return
+        last_packet_id = packet_id
+
+    if last_packet_id is not None:
         now = time.monotonic()
+        for key in batch.sent_keys:
+            out_queue.mark_sent(key, last_packet_id, now=now)
 
 
 async def _check_ack_timeouts(
@@ -143,7 +153,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     conn_type = config.get(CONF_CONN_TYPE, DEFAULT_CONN_TYPE)
     port = config.get(CONF_PORT)
-    await transport.connect(conn_type, port)
+    try:
+        async with asyncio.timeout(30):
+            await transport.connect(conn_type, port)
+    except (asyncio.TimeoutError, Exception) as e:
+        _LOGGER.warning("Connection failed: %s, will retry", e)
+        raise ConfigEntryNotReady(
+            f"Failed to connect to {conn_type} {port}: {e}"
+        ) from e
 
     # Реестр пуст — пользователь добавляет устройства через options_flow
     ha_bridge.start_tracking([])
@@ -155,16 +172,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     queue_period = config.get(CONF_QUEUE_PERIOD, DEFAULT_QUEUE_PERIOD)
     ack_timeout = config.get(CONF_ACK_TIMEOUT, DEFAULT_ACK_TIMEOUT)
 
+    def _schedule(coro):
+        """Запускает корутину в event loop из любого треда."""
+        hass.loop.call_soon_threadsafe(
+            asyncio.create_task, coro
+        )
+
     unsub_send = async_track_time_interval(
         hass,
-        lambda now: hass.async_create_task(
+        lambda now: _schedule(
             _send_cycle(out_queue, batcher, transport)
         ),
         timedelta(seconds=queue_period),
     )
     unsub_ack = async_track_time_interval(
         hass,
-        lambda now: hass.async_create_task(
+        lambda now: _schedule(
             _check_ack_timeouts(out_queue, ack_timeout, queue_period)
         ),
         timedelta(seconds=max(1, min(ack_timeout, queue_period) // 2)),
