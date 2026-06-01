@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import glob
 import logging
 import os
 import secrets
 from typing import Any
 
 import voluptuous as vol
+from serial.tools import list_ports
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
@@ -59,11 +59,23 @@ _BASE_FIELDS = {
     vol.Required(CONF_PUSH_ENABLED, default=DEFAULT_PUSH_ENABLED): bool,
 }
 
-SERIAL_BY_ID = "/dev/serial/by-id/"
-
-
 def _get_serial_ports() -> list[str]:
-    ports = sorted(glob.glob(os.path.join(SERIAL_BY_ID, "*")))
+    ports = []
+    for p in list_ports.comports():
+        device = p.device
+        if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
+            continue
+        real = os.path.realpath(device)
+        by_id_dir = "/dev/serial/by-id/"
+        if os.path.isdir(by_id_dir):
+            for entry in sorted(os.listdir(by_id_dir)):
+                if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
+                    ports.append(os.path.join(by_id_dir, entry))
+                    break
+            else:
+                ports.append(device)
+        else:
+            ports.append(device)
     if not ports:
         ports = ["/dev/ttyACM0"]
     return ports
