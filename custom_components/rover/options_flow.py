@@ -55,26 +55,18 @@ _BASE_FIELDS = {
     vol.Required(CONF_PUSH_ENABLED, default=True): bool,
 }
 
-def _get_serial_ports() -> list[str]:
-    ports = []
-    for p in list_ports.comports():
-        device = p.device
-        if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
-            continue
-        real = os.path.realpath(device)
-        by_id_dir = "/dev/serial/by-id/"
-        if os.path.isdir(by_id_dir):
-            for entry in sorted(os.listdir(by_id_dir)):
-                if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
-                    ports.append(os.path.join(by_id_dir, entry))
-                    break
-            else:
-                ports.append(device)
-        else:
-            ports.append(device)
-    if not ports:
-        ports = ["/dev/ttyACM0"]
-    return ports
+async def _get_serial_ports(hass) -> list[str]:
+    def _scan() -> list[str]:
+        from serial.tools import list_ports
+        return [
+            p.device for p in list_ports.comports()
+            if p.device.startswith("/dev/ttyACM") or p.device.startswith("/dev/ttyUSB")
+        ]
+    try:
+        ports = await hass.async_add_executor_job(_scan)
+    except Exception:
+        ports = []
+    return ports if ports else ["/dev/ttyACM0"]
 
 
 class RoverOptionsFlow(config_entries.OptionsFlow):
@@ -136,7 +128,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_init()
 
             data = self._entry.data
-            ports = _get_serial_ports()
+            ports = await _get_serial_ports(self.hass)
 
             schema = vol.Schema({
                 vol.Required(CONF_PORT, default=data.get(CONF_PORT, ports[0] if ports else "")): SelectSelector(
@@ -172,13 +164,19 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             _LOGGER.exception("Rover options_flow async_step_general_tcp failed")
             raise
 
+    def _runtime(self):
+        runtime = getattr(self._entry, 'runtime_data', None)
+        if runtime is None:
+            raise RuntimeError("Rover runtime data not available — entry not initialized")
+        return runtime
+
     # ---------- Устройства ----------
 
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         try:
-            runtime = self._entry.runtime_data
+            runtime = self._runtime()
             registry = runtime.registry
 
             if user_input is not None:
@@ -235,7 +233,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         try:
-            runtime = self._entry.runtime_data
+            runtime = self._runtime()
             registry = runtime.registry
             users_list = ", ".join(u.id for u in registry.all_users()) or "(пусто)"
             return self.async_show_menu(
@@ -251,7 +249,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         try:
-            runtime = self._entry.runtime_data
+            runtime = self._runtime()
             registry = runtime.registry
 
             if user_input is not None:
@@ -277,7 +275,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         try:
-            runtime = self._entry.runtime_data
+            runtime = self._runtime()
             registry = runtime.registry
 
             if user_input is not None:
@@ -311,7 +309,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             if user_input is not None:
                 return await self.async_step_init()
 
-            runtime = self._entry.runtime_data
+            runtime = self._runtime()
             registry = runtime.registry
 
             data = self._entry.data

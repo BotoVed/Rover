@@ -220,20 +220,23 @@ class TestRegistryListeners:
     async def test_start_registry_listeners_subscribes(
         self, bridge, hass
     ):
-        entity_reg = MagicMock()
-        area_reg = MagicMock()
-        with (
-            patch("rover.ha_bridge.er.async_get", return_value=entity_reg),
-            patch("rover.ha_bridge.ar.async_get", return_value=area_reg),
-        ):
-            await bridge.start_registry_listeners()
+        hass.bus.async_listen.return_value = lambda: None
+        await bridge.start_registry_listeners()
 
-        entity_reg.async_subscribe.assert_called_once_with(
-            bridge._handle_entity_registry_event
+        hass.bus.async_listen.assert_any_call(
+            "entity_registry_updated", bridge._handle_registry_event
         )
-        area_reg.async_subscribe.assert_called_once_with(
-            bridge._handle_area_registry_event
+        hass.bus.async_listen.assert_any_call(
+            "area_registry_updated", bridge._handle_registry_event
         )
+        assert len(bridge._unsub_registry) == 2
+
+    async def test_start_registry_listeners_stores_unsub(self, bridge, hass):
+        unsub = MagicMock()
+        hass.bus.async_listen.return_value = unsub
+        await bridge.start_registry_listeners()
+
+        assert unsub in bridge._unsub_registry
 
 
 class TestRegistryChangedCallback:
@@ -241,21 +244,12 @@ class TestRegistryChangedCallback:
         callback = MagicMock()
         bridge.set_callbacks(on_registry_changed=callback)
 
-        bridge._handle_entity_registry_event(MagicMock())
-
-        callback.assert_called_once()
-
-    async def test_area_registry_event_calls_callback(self, bridge, hass):
-        callback = MagicMock()
-        bridge.set_callbacks(on_registry_changed=callback)
-
-        bridge._handle_area_registry_event(MagicMock())
+        bridge._handle_registry_event(MagicMock())
 
         callback.assert_called_once()
 
     async def test_no_callback_set(self, bridge, hass):
-        bridge._handle_entity_registry_event(MagicMock())
-        bridge._handle_area_registry_event(MagicMock())
+        bridge._handle_registry_event(MagicMock())
 
 
 class TestRegistryProperties:

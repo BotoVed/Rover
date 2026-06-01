@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import logging
-import os
 import secrets
 from typing import Any
 
 import voluptuous as vol
-from serial.tools import list_ports
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
@@ -59,26 +57,18 @@ _BASE_FIELDS = {
     vol.Required(CONF_PUSH_ENABLED, default=DEFAULT_PUSH_ENABLED): bool,
 }
 
-def _get_serial_ports() -> list[str]:
-    ports = []
-    for p in list_ports.comports():
-        device = p.device
-        if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
-            continue
-        real = os.path.realpath(device)
-        by_id_dir = "/dev/serial/by-id/"
-        if os.path.isdir(by_id_dir):
-            for entry in sorted(os.listdir(by_id_dir)):
-                if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
-                    ports.append(os.path.join(by_id_dir, entry))
-                    break
-            else:
-                ports.append(device)
-        else:
-            ports.append(device)
-    if not ports:
-        ports = ["/dev/ttyACM0"]
-    return ports
+async def _get_serial_ports(hass) -> list[str]:
+    def _scan() -> list[str]:
+        from serial.tools import list_ports
+        return [
+            p.device for p in list_ports.comports()
+            if p.device.startswith("/dev/ttyACM") or p.device.startswith("/dev/ttyUSB")
+        ]
+    try:
+        ports = await hass.async_add_executor_job(_scan)
+    except Exception:
+        ports = []
+    return ports if ports else ["/dev/ttyACM0"]
 
 
 class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -127,7 +117,7 @@ class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     data=user_input,
                 )
 
-            ports = _get_serial_ports()
+            ports = await _get_serial_ports(self.hass)
             schema = vol.Schema({
                 vol.Required(CONF_PORT): SelectSelector(
                     SelectSelectorConfig(options=[

@@ -14,6 +14,7 @@ class HaBridge:
         self._on_registry_changed: Callable[[], None] | None = None
         self._tracked_entities: set[str] = set()
         self._unsub_state: list = []
+        self._unsub_registry: list = []
 
     def set_callbacks(
         self,
@@ -47,6 +48,10 @@ class HaBridge:
             if unsub:
                 unsub()
         self._unsub_state.clear()
+        for unsub in self._unsub_registry:
+            if unsub:
+                unsub()
+        self._unsub_registry.clear()
 
     def stop_tracking_entity(self, entity_id: str) -> None:
         self._tracked_entities.discard(entity_id)
@@ -67,16 +72,16 @@ class HaBridge:
             self._on_state_changed(entity_id, new_state)
 
     async def start_registry_listeners(self) -> None:
-        entity_reg = er.async_get(self._hass)
-        area_reg = ar.async_get(self._hass)
-        entity_reg.async_subscribe(self._handle_entity_registry_event)
-        area_reg.async_subscribe(self._handle_area_registry_event)
+        unsub = self._hass.bus.async_listen(
+            "entity_registry_updated", self._handle_registry_event
+        )
+        self._unsub_registry.append(unsub)
+        unsub = self._hass.bus.async_listen(
+            "area_registry_updated", self._handle_registry_event
+        )
+        self._unsub_registry.append(unsub)
 
-    def _handle_entity_registry_event(self, event: Any) -> None:
-        if self._on_registry_changed:
-            self._on_registry_changed()
-
-    def _handle_area_registry_event(self, event: Any) -> None:
+    def _handle_registry_event(self, event: Any) -> None:
         if self._on_registry_changed:
             self._on_registry_changed()
 
