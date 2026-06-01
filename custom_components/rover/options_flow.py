@@ -56,17 +56,31 @@ _BASE_FIELDS = {
 }
 
 async def _get_serial_ports(hass) -> list[str]:
+    import os
+
     def _scan() -> list[str]:
         from serial.tools import list_ports
-        return [
-            p.device for p in list_ports.comports()
-            if p.device.startswith("/dev/ttyACM") or p.device.startswith("/dev/ttyUSB")
-        ]
+        ports: list[str] = []
+        for p in list_ports.comports():
+            device = p.device
+            if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
+                continue
+            real = os.path.realpath(device)
+            by_id_dir = "/dev/serial/by-id/"
+            if os.path.isdir(by_id_dir):
+                for entry in sorted(os.listdir(by_id_dir)):
+                    if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
+                        ports.append(os.path.join(by_id_dir, entry))
+                        break
+                else:
+                    ports.append(device)
+            else:
+                ports.append(device)
+        return ports if ports else ["/dev/ttyACM0"]
     try:
-        ports = await hass.async_add_executor_job(_scan)
+        return await hass.async_add_executor_job(_scan)
     except Exception:
-        ports = []
-    return ports if ports else ["/dev/ttyACM0"]
+        return ["/dev/ttyACM0"]
 
 
 class RoverOptionsFlow(config_entries.OptionsFlow):
