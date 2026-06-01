@@ -6,7 +6,7 @@
   "issue_tracker": "https://github.com/BotoVed/Rover/issues",
   "codeowners": ["@BotoVed"],
   "requirements": [
-    "meshtastic==2.7.1",
+    "meshtastic==2.7.8",
     "msgpack==1.1.2"
   ],
   "iot_class": "local_push",
