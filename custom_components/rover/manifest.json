@@ -1,7 +1,7 @@
 {
   "domain": "rover",
   "name": "Rover",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "documentation": "https://github.com/BotoVed/Rover",
   "issue_tracker": "https://github.com/BotoVed/Rover/issues",
   "codeowners": ["@BotoVed"],

@@ -9,10 +9,13 @@
 
 from __future__ import annotations
 
+import logging
 import secrets
 from typing import Any
 
 import voluptuous as vol
+
+_LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 
@@ -58,28 +61,31 @@ class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Единственный шаг: общие настройки."""
-        if user_input is not None:
-            # Генерируем случайную соль для паролей (SB-042)
-            user_input[CONF_PASSWORD_SALT] = secrets.token_hex(DEFAULT_PASSWORD_SALT_BYTES)
-            return self.async_create_entry(
-                title=user_input[CONF_HOME_NAME],
-                data=user_input,
-            )
+        try:
+            if user_input is not None:
+                user_input[CONF_PASSWORD_SALT] = secrets.token_hex(DEFAULT_PASSWORD_SALT_BYTES)
+                return self.async_create_entry(
+                    title=user_input[CONF_HOME_NAME],
+                    data=user_input,
+                )
 
-        schema = vol.Schema({
-            vol.Required(CONF_HOME_NAME, default=DEFAULT_HOME_NAME): str,
-            vol.Required(CONF_CONN_TYPE, default=DEFAULT_CONN_TYPE): vol.In(CONN_TYPES),
-            vol.Required(CONF_PORT): str,
-            vol.Required(CONF_CHANNEL, default=DEFAULT_CHANNEL): str,
-            vol.Required(CONF_PSK, default=DEFAULT_PSK): str,
-            vol.Required(CONF_HOP_LIMIT, default=DEFAULT_HOP_LIMIT):
-                vol.All(vol.Coerce(int), vol.Range(min=0, max=7)),
-            vol.Required(CONF_QUEUE_PERIOD, default=DEFAULT_QUEUE_PERIOD):
-                vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
-            vol.Required(CONF_MAX_RETRIES, default=DEFAULT_MAX_RETRIES):
-                vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
-            vol.Required(CONF_ACK_TIMEOUT, default=DEFAULT_ACK_TIMEOUT_VALUE):
-                vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
-            vol.Required(CONF_PUSH_ENABLED, default=DEFAULT_PUSH_ENABLED): bool,
-        })
-        return self.async_show_form(step_id="user", data_schema=schema)
+            schema = vol.Schema({
+                vol.Required(CONF_HOME_NAME, default=DEFAULT_HOME_NAME): str,
+                vol.Required(CONF_CONN_TYPE, default=DEFAULT_CONN_TYPE): vol.In(CONN_TYPES),
+                vol.Required(CONF_PORT): str,
+                vol.Required(CONF_CHANNEL, default=DEFAULT_CHANNEL): str,
+                vol.Required(CONF_PSK, default=DEFAULT_PSK): str,
+                vol.Required(CONF_HOP_LIMIT, default=DEFAULT_HOP_LIMIT):
+                    vol.All(vol.Coerce(int), vol.Range(min=0, max=7)),
+                vol.Required(CONF_QUEUE_PERIOD, default=DEFAULT_QUEUE_PERIOD):
+                    vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+                vol.Required(CONF_MAX_RETRIES, default=DEFAULT_MAX_RETRIES):
+                    vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+                vol.Required(CONF_ACK_TIMEOUT, default=DEFAULT_ACK_TIMEOUT_VALUE):
+                    vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
+                vol.Required(CONF_PUSH_ENABLED, default=DEFAULT_PUSH_ENABLED): bool,
+            })
+            return self.async_show_form(step_id="user", data_schema=schema)
+        except Exception:
+            _LOGGER.exception("Rover config_flow async_step_user failed")
+            raise
