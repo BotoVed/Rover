@@ -318,17 +318,18 @@ def test_hash_meta_changes_with_content():
 
 # ---------- Save / Load ----------
 
-def test_save_and_load_roundtrip(tmp_path):
+@pytest.mark.asyncio
+async def test_save_and_load_roundtrip(tmp_path):
     r1 = Registry()
     sid = r1.register("light.salon", "light", "Люстра", area="salon")
     r1.set_areas([Area(id="salon", n="Гостиная")])
     r1.set_users([User(id="admin", hash="abc")])
 
     path = tmp_path / "registry.json"
-    r1.save(path)
+    await r1.save(path)
 
     r2 = Registry()
-    r2.load(path)
+    await r2.load(path)
 
     assert len(r2) == 1
     assert r2.get_by_short_id(sid).entity_id == "light.salon"
@@ -337,25 +338,27 @@ def test_save_and_load_roundtrip(tmp_path):
     assert r1.compute_section_hashes() == r2.compute_section_hashes()
 
 
-def test_load_missing_file_is_noop(tmp_path):
+@pytest.mark.asyncio
+async def test_load_missing_file_is_noop(tmp_path):
     r = Registry()
-    r.load(tmp_path / "nope.json")
+    await r.load(tmp_path / "nope.json")
     assert len(r) == 0
 
 
-def test_load_clears_existing(tmp_path):
+@pytest.mark.asyncio
+async def test_load_clears_existing(tmp_path):
     r1 = Registry()
     r1.register("light.a", "light", "A")
     r1.set_areas([Area(id="z1", n="Z1")])
     r1.set_users([User(id="u1", hash="h1")])
     path = tmp_path / "reg.json"
-    r1.save(path)
+    await r1.save(path)
 
     r2 = Registry()
     r2.register("switch.b", "switch", "B")
     r2.set_areas([Area(id="z2", n="Z2")])
     r2.set_users([User(id="u2", hash="h2")])
-    r2.load(path)
+    await r2.load(path)
 
     assert "light.a" in r2
     assert "switch.b" not in r2
@@ -365,14 +368,15 @@ def test_load_clears_existing(tmp_path):
     assert r2.get_user("u2") is None
 
 
-def test_short_id_stays_after_persistence(tmp_path):
+@pytest.mark.asyncio
+async def test_short_id_stays_after_persistence(tmp_path):
     r1 = Registry()
     sid = r1.register("light.special", "light", "X")
     path = tmp_path / "reg.json"
-    r1.save(path)
+    await r1.save(path)
 
     r2 = Registry()
-    r2.load(path)
+    await r2.load(path)
     assert r2.get_by_entity_id("light.special").short_id == sid
 
 

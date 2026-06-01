@@ -130,7 +130,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     registry = Registry()
     registry_path = hass.config.path(f"{DOMAIN}_registry.json")
-    registry.load(registry_path)
+    await registry.load(registry_path)
 
     ha_bridge = HaBridge(hass)
     out_queue = OutQueue()
@@ -233,7 +233,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await data.transport.disconnect()
 
     registry_path = hass.config.path(f"{DOMAIN}_registry.json")
-    data.registry.save(registry_path)
+    await data.registry.save(registry_path)
 
     return True
 

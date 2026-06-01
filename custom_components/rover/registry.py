@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from dataclasses import asdict, dataclass
@@ -251,21 +252,27 @@ class Registry:
 
     # ---------- Персистентность ----------
 
-    def save(self, path: Path | str) -> None:
+    async def save(self, path: Path | str) -> None:
         path = Path(path)
         data = {
             "devices": [asdict(d) for d in self.all_devices()],
             "areas": [asdict(a) for a in self.all_areas()],
             "users": [asdict(u) for u in self.all_users()],
         }
-        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        await asyncio.to_thread(
+            lambda: path.write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        )
 
-    def load(self, path: Path | str) -> None:
+    async def load(self, path: Path | str) -> None:
         path = Path(path)
         if not path.exists():
             return
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            data = await asyncio.to_thread(
+                lambda: json.loads(path.read_text(encoding="utf-8"))
+            )
         except (json.JSONDecodeError, OSError):
             _LOGGER.warning("Registry file %s corrupted, starting fresh", path)
             data = {}
