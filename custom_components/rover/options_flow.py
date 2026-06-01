@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import glob
 import json
 import logging
+import os
 from typing import Any
 
 import voluptuous as vol
-from serial.tools import list_ports
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
@@ -53,6 +54,15 @@ _BASE_FIELDS = {
         vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
     vol.Required(CONF_PUSH_ENABLED, default=True): bool,
 }
+
+SERIAL_BY_ID = "/dev/serial/by-id/"
+
+
+def _get_serial_ports() -> list[str]:
+    ports = sorted(glob.glob(os.path.join(SERIAL_BY_ID, "*")))
+    if not ports:
+        ports = ["/dev/ttyACM0"]
+    return ports
 
 
 class RoverOptionsFlow(config_entries.OptionsFlow):
@@ -114,18 +124,12 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 return await self.async_step_init()
 
             data = self._entry.data
-
-            ports = []
-            for p in list_ports.comports():
-                if p.device.startswith(("/dev/ttyACM", "/dev/ttyUSB")):
-                    ports.append(p.device)
-            if not ports:
-                ports = ["/dev/ttyACM0"]
+            ports = _get_serial_ports()
 
             schema = vol.Schema({
                 vol.Required(CONF_PORT, default=data.get(CONF_PORT, ports[0] if ports else "")): SelectSelector(
                     SelectSelectorConfig(options=[
-                        {"value": p, "label": p} for p in ports
+                        {"value": p, "label": os.path.basename(p)} for p in ports
                     ])
                 ),
                 **{k: v for k, v in _BASE_FIELDS.items()},
