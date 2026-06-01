@@ -6,7 +6,6 @@ import os
 from typing import Any
 
 import voluptuous as vol
-from serial.tools import list_ports
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
@@ -56,6 +55,10 @@ _BASE_FIELDS = {
 }
 
 async def _get_serial_ports(hass) -> list[str]:
+    """Сканирует USB-порты, возвращает /dev/serial/by-id/* если доступно.
+
+    Вся файловая работа — в executor, чтобы не блокировать event loop.
+    """
     import os
 
     def _scan() -> list[str]:
@@ -63,11 +66,13 @@ async def _get_serial_ports(hass) -> list[str]:
         ports: list[str] = []
         for p in list_ports.comports():
             device = p.device
+            # Только ACM (USB-адаптеры) и USB (CH340/CP210x)
             if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
                 continue
             real = os.path.realpath(device)
             by_id_dir = "/dev/serial/by-id/"
             if os.path.isdir(by_id_dir):
+                # Ищем стабильный симплинк — он не меняется при перезагрузке
                 for entry in sorted(os.listdir(by_id_dir)):
                     if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
                         ports.append(os.path.join(by_id_dir, entry))
@@ -179,6 +184,10 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             raise
 
     def _runtime(self):
+        """Достаёт runtime_data из entry.
+
+        getattr — защита от старых версий HA, где поля ConfigEntry ещё нет.
+        """
         runtime = getattr(self._entry, 'runtime_data', None)
         if runtime is None:
             raise RuntimeError("Rover runtime data not available — entry not initialized")

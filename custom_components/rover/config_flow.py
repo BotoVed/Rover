@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from typing import Any
 
@@ -58,6 +59,10 @@ _BASE_FIELDS = {
 }
 
 async def _get_serial_ports(hass) -> list[str]:
+    """Сканирует USB-порты, возвращает /dev/serial/by-id/* если доступно.
+
+    Вся файловая работа — в executor, чтобы не блокировать event loop.
+    """
     import os
 
     def _scan() -> list[str]:
@@ -65,11 +70,13 @@ async def _get_serial_ports(hass) -> list[str]:
         ports: list[str] = []
         for p in list_ports.comports():
             device = p.device
+            # Только ACM (USB-адаптеры) и USB (CH340/CP210x)
             if not (device.startswith("/dev/ttyACM") or device.startswith("/dev/ttyUSB")):
                 continue
             real = os.path.realpath(device)
             by_id_dir = "/dev/serial/by-id/"
             if os.path.isdir(by_id_dir):
+                # Ищем стабильный симплинк — он не меняется при перезагрузке
                 for entry in sorted(os.listdir(by_id_dir)):
                     if os.path.realpath(os.path.join(by_id_dir, entry)) == real:
                         ports.append(os.path.join(by_id_dir, entry))
