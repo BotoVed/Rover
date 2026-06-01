@@ -12,7 +12,6 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers import selector
 from homeassistant.helpers.selector import (
-    SelectOption,
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
@@ -93,8 +92,8 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             schema = vol.Schema({
                 vol.Required(CONF_CONN_TYPE, default=data.get(CONF_CONN_TYPE, "serial")): SelectSelector(
                     SelectSelectorConfig(options=[
-                        SelectOption(value="serial", label="Serial (USB)"),
-                        SelectOption(value="tcp", label="TCP"),
+                        {"value": "serial", "label": "Serial (USB)"},
+                        {"value": "tcp", "label": "TCP"},
                     ])
                 ),
             })
@@ -126,7 +125,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             schema = vol.Schema({
                 vol.Required(CONF_PORT, default=data.get(CONF_PORT, ports[0] if ports else "")): SelectSelector(
                     SelectSelectorConfig(options=[
-                        SelectOption(value=p, label=p) for p in ports
+                        {"value": p, "label": p} for p in ports
                     ])
                 ),
                 **{k: v for k, v in _BASE_FIELDS.items()},

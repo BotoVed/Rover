@@ -11,7 +11,6 @@ _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers.selector import (
-    SelectOption,
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
@@ -93,8 +92,8 @@ class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             schema = vol.Schema({
                 vol.Required(CONF_CONN_TYPE, default=DEFAULT_CONN_TYPE): SelectSelector(
                     SelectSelectorConfig(options=[
-                        SelectOption(value="serial", label="Serial (USB)"),
-                        SelectOption(value="tcp", label="TCP"),
+                        {"value": "serial", "label": "Serial (USB)"},
+                        {"value": "tcp", "label": "TCP"},
                     ])
                 ),
             })
@@ -119,7 +118,7 @@ class RoverConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             schema = vol.Schema({
                 vol.Required(CONF_PORT): SelectSelector(
                     SelectSelectorConfig(options=[
-                        SelectOption(value=p, label=p) for p in ports
+                        {"value": p, "label": p} for p in ports
                     ])
                 ),
                 **_BASE_FIELDS,
