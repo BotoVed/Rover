@@ -264,7 +264,11 @@ class Registry:
         path = Path(path)
         if not path.exists():
             return
-        data = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            _LOGGER.warning("Registry file %s corrupted, starting fresh", path)
+            data = {}
 
         self._by_short_id.clear()
         self._by_entity_id.clear()
