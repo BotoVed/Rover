@@ -28,12 +28,50 @@ git push origin main
 
 ### 3. Собрать rover.zip
 
-HACS ожидает ZIP-файл с именем `rover.zip`, содержащий папку `rover/` с файлами интеграции.
+ZIP должен содержать файлы в корне (без `rover/`-префикса), иначе HACS распакует с двойной вложенностью.
 
 ```bash
-cd tmp/rover/custom_components
-zip -r ../rover.zip rover/ -x "rover/__pycache__/*" "rover/*.pyc"
-cd ..
+cd tmp/rover/custom_components/rover
+zip -r ../../rover.zip . -x "__pycache__/*" "*.pyc"
+cd ../..
+```
+
+Проверка содержимого:
+
+```bash
+unzip -l rover.zip | head -30
+```
+
+Должен содержать файлы в корне (без папки `rover/`):
+```
+__init__.py
+manifest.json
+const.py
+codec.py
+config_flow.py
+options_flow.py
+brand/icon.png
+translations/en.json
+...
+```
+
+Проверка содержимого:
+
+```bash
+unzip -l rover.zip | head -30
+```
+
+Должен содержать файлы в корне (без папки `rover/`):
+```
+__init__.py
+manifest.json
+const.py
+codec.py
+config_flow.py
+options_flow.py
+brand/icon.png
+translations/en.json
+...
 ```
 
 Проверка содержимого:
