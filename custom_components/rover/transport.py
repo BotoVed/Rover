@@ -96,16 +96,15 @@ class Transport:
         if not self._connected or not self._interface:
             return None
 
-        def _send() -> None:
-            self._interface.sendData(
+        def _send() -> int | None:
+            return self._interface.sendData(
                 payload,
                 destinationId=MESHTASTIC_BROADCAST_ADDR,
                 portNum=MESHTASTIC_PRIVATE_APP_PORT,
                 wantAck=want_ack,
             )
 
-        await asyncio.get_running_loop().run_in_executor(None, _send)
-        return 0
+        return await asyncio.get_running_loop().run_in_executor(None, _send)
 
     async def disconnect(self) -> None:
         self._stop_reconnect_loop()

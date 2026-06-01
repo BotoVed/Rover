@@ -60,6 +60,15 @@ class OutQueue:
 
     # ---------- Базовые операции ----------
 
+    def enqueue(
+        self,
+        key: Hashable,
+        msg: dict,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        period: float | None = None,
+    ) -> None:
+        self.put(key, msg, max_retries)
+
     def put(
         self,
         key: Hashable,

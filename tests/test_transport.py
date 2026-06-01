@@ -117,6 +117,7 @@ class TestSend:
     @patch("meshtastic.serial_interface.SerialInterface")
     async def test_send_calls_sendData(self, mock_serial_iface, transport):
         mock_iface = MagicMock()
+        mock_iface.sendData.return_value = 42
         mock_serial_iface.return_value = mock_iface
         await transport.connect("serial", "/dev/ttyACM0")
 
@@ -128,7 +129,7 @@ class TestSend:
             portNum=256,
             wantAck=True,
         )
-        assert result == 0
+        assert result == 42
 
     async def test_send_returns_none_when_disconnected(self, transport):
         result = await transport.send(b"hello")

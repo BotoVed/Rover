@@ -67,13 +67,14 @@ class TestOnPing:
         }
         assert args[2] == 3
         assert args[3] == 10
-        outbox.wake_suspended.assert_called_once_with(3)
+        outbox.wake_suspended.assert_called_once_with()
+
 
     async def test_updates_online_nodes(
         self, handlers, registry, outbox, mock_time
     ):
-        await handlers.on_ping({"tp": 6, "ts": 500}, 99)
-
+        mock_time.return_value = 1000.0
+        await handlers.on_ping({"tp": 6}, 99)
         assert handlers._online_nodes.get(99) == 1000.0
 
 
@@ -398,7 +399,7 @@ class TestMarkNodeOnline:
             handlers.mark_node_online(42)
 
         assert handlers._online_nodes[42] == 5000
-        outbox.wake_suspended.assert_called_once_with(3)
+        outbox.wake_suspended.assert_called_once_with()
 
 
 # =====================================================================

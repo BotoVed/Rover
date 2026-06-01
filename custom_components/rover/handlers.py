@@ -63,7 +63,7 @@ class Handlers:
         hashes = self.get_section_hashes()
         pong = {"tp": TP_PING, "ts": ts, "h": hashes}
         self._outbox.enqueue(PONG_QUEUE_KEY, pong, self._max_retries, self._queue_period)
-        self._outbox.wake_suspended(self._max_retries)
+        self._outbox.wake_suspended()
 
     async def on_command(self, packet: dict, from_node: int) -> None:
         short_id = packet.get("id")
@@ -176,4 +176,4 @@ class Handlers:
 
     def mark_node_online(self, node_id: int) -> None:
         self._online_nodes[node_id] = time.time()
-        self._outbox.wake_suspended(self._max_retries)
+        self._outbox.wake_suspended()

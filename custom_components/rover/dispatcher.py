@@ -1,22 +1,14 @@
 from __future__ import annotations
 
-from .codec import decode
 from .const import TP_CMD, TP_PING, TP_REQ
-from .queue import InDedup
 
 
 class Dispatcher:
     def __init__(self, handlers) -> None:
         self._handlers = handlers
-        self._dedup = InDedup()
 
-    async def dispatch(self, payload: bytes, from_node: int) -> None:
-        packet = decode(payload)
+    async def dispatch(self, packet: dict, from_node: int) -> None:
         tp = packet.get("tp")
-
-        cmid = packet.get("cmid")
-        if cmid and self._dedup.seen(cmid):
-            return
 
         if tp == TP_CMD:
             if "req" in packet:
