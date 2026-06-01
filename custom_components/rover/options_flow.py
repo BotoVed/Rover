@@ -1,14 +1,3 @@
-"""Options flow для Rover — мастер настроек после установки.
-
-Главное меню (init):
-- Общие — изменение базовых настроек подключения и параметров очереди.
-- Устройства — multi-select из подходящих entity HA.
-- Пользователи — добавление/удаление с хешированием пароля.
-- Конфиг — read-only просмотр всех секций конфига в JSON для ручного переноса на фронт.
-
-См. DECISIONS.md SB-041, SB-042, SB-043.
-"""
-
 from __future__ import annotations
 
 import json
@@ -16,11 +5,19 @@ import logging
 from typing import Any
 
 import voluptuous as vol
+from serial.tools import list_ports
 
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
 from homeassistant.helpers import selector
+from homeassistant.helpers.selector import (
+    SelectOption,
+    SelectSelector,
+    SelectSelectorConfig,
+    TextSelector,
+    TextSelectorConfig,
+)
 
 from .const import (
     CONF_ACK_TIMEOUT,
@@ -41,23 +38,33 @@ from .const import (
     SEC_USERS,
 )
 
-# Поддерживаемые домены для селектора устройств
 SUPPORTED_DOMAINS = list(HA_DOMAIN_TO_DEV_TYPE.keys())
 
-CONN_TYPES = ["serial", "tcp"]
+_BASE_FIELDS = {
+    vol.Required(CONF_HOME_NAME, default=""): str,
+    vol.Required(CONF_CHANNEL, default="LongFast"): str,
+    vol.Required(CONF_PSK, default="AQ=="): str,
+    vol.Required(CONF_HOP_LIMIT, default=0):
+        vol.All(vol.Coerce(int), vol.Range(min=0, max=7)),
+    vol.Required(CONF_QUEUE_PERIOD, default=15):
+        vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
+    vol.Required(CONF_MAX_RETRIES, default=5):
+        vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+    vol.Required(CONF_ACK_TIMEOUT, default=10):
+        vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
+    vol.Required(CONF_PUSH_ENABLED, default=True): bool,
+}
 
 
 class RoverOptionsFlow(config_entries.OptionsFlow):
-    """OptionsFlow с меню разделов."""
-
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._entry = config_entry
         self._last_action: str | None = None
+        self._conn_type: str = "serial"
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Главное меню OptionsFlow."""
         try:
             return self.async_show_menu(
                 step_id="init",
@@ -75,9 +82,66 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_general(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Редактирование общих настроек."""
         try:
             if user_input is not None:
+                self._conn_type = user_input[CONF_CONN_TYPE]
+                if self._conn_type == "serial":
+                    return await self.async_step_general_serial()
+                return await self.async_step_general_tcp()
+
+            data = self._entry.data
+            schema = vol.Schema({
+                vol.Required(CONF_CONN_TYPE, default=data.get(CONF_CONN_TYPE, "serial")): SelectSelector(
+                    SelectSelectorConfig(options=[
+                        SelectOption(value="serial", label="Serial (USB)"),
+                        SelectOption(value="tcp", label="TCP"),
+                    ])
+                ),
+            })
+            return self.async_show_form(step_id="general", data_schema=schema)
+        except Exception:
+            _LOGGER.exception("Rover options_flow async_step_general failed")
+            raise
+
+    async def async_step_general_serial(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        try:
+            if user_input is not None:
+                user_input[CONF_CONN_TYPE] = self._conn_type
+                new_data = {**self._entry.data, **user_input}
+                self.hass.config_entries.async_update_entry(self._entry, data=new_data)
+                self._last_action = "Общие настройки обновлены"
+                return await self.async_step_init()
+
+            data = self._entry.data
+
+            ports = []
+            for p in list_ports.comports():
+                if p.device.startswith(("/dev/ttyACM", "/dev/ttyUSB")):
+                    ports.append(p.device)
+            if not ports:
+                ports = ["/dev/ttyACM0"]
+
+            schema = vol.Schema({
+                vol.Required(CONF_PORT, default=data.get(CONF_PORT, ports[0] if ports else "")): SelectSelector(
+                    SelectSelectorConfig(options=[
+                        SelectOption(value=p, label=p) for p in ports
+                    ])
+                ),
+                **{k: v for k, v in _BASE_FIELDS.items()},
+            })
+            return self.async_show_form(step_id="general_serial", data_schema=schema)
+        except Exception:
+            _LOGGER.exception("Rover options_flow async_step_general_serial failed")
+            raise
+
+    async def async_step_general_tcp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        try:
+            if user_input is not None:
+                user_input[CONF_CONN_TYPE] = self._conn_type
                 new_data = {**self._entry.data, **user_input}
                 self.hass.config_entries.async_update_entry(self._entry, data=new_data)
                 self._last_action = "Общие настройки обновлены"
@@ -85,25 +149,12 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
 
             data = self._entry.data
             schema = vol.Schema({
-                vol.Required(CONF_HOME_NAME, default=data.get(CONF_HOME_NAME, "")): str,
-                vol.Required(CONF_CONN_TYPE, default=data.get(CONF_CONN_TYPE, "serial")):
-                    vol.In(CONN_TYPES),
-                vol.Required(CONF_PORT, default=data.get(CONF_PORT, "")): str,
-                vol.Required(CONF_CHANNEL, default=data.get(CONF_CHANNEL, "LongFast")): str,
-                vol.Required(CONF_PSK, default=data.get(CONF_PSK, "AQ==")): str,
-                vol.Required(CONF_HOP_LIMIT, default=data.get(CONF_HOP_LIMIT, 0)):
-                    vol.All(vol.Coerce(int), vol.Range(min=0, max=7)),
-                vol.Required(CONF_QUEUE_PERIOD, default=data.get(CONF_QUEUE_PERIOD, 15)):
-                    vol.All(vol.Coerce(int), vol.Range(min=5, max=60)),
-                vol.Required(CONF_MAX_RETRIES, default=data.get(CONF_MAX_RETRIES, 5)):
-                    vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
-                vol.Required(CONF_ACK_TIMEOUT, default=data.get(CONF_ACK_TIMEOUT, 10)):
-                    vol.All(vol.Coerce(int), vol.Range(min=5, max=30)),
-                vol.Required(CONF_PUSH_ENABLED, default=data.get(CONF_PUSH_ENABLED, True)): bool,
+                vol.Required(CONF_PORT, default=data.get(CONF_PORT, "")): TextSelector(TextSelectorConfig()),
+                **{k: v for k, v in _BASE_FIELDS.items()},
             })
-            return self.async_show_form(step_id="general", data_schema=schema)
+            return self.async_show_form(step_id="general_tcp", data_schema=schema)
         except Exception:
-            _LOGGER.exception("Rover options_flow async_step_general failed")
+            _LOGGER.exception("Rover options_flow async_step_general_tcp failed")
             raise
 
     # ---------- Устройства ----------
@@ -111,7 +162,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Multi-select устройств. Уже зарегистрированные — отмечены."""
         try:
             runtime = self._entry.runtime_data
             registry = runtime.registry
@@ -169,7 +219,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_users_menu(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Меню действий с пользователями."""
         try:
             runtime = self._entry.runtime_data
             registry = runtime.registry
@@ -186,7 +235,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_user_add(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Добавление пользователя: имя + пароль."""
         try:
             runtime = self._entry.runtime_data
             registry = runtime.registry
@@ -213,7 +261,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_user_remove(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Удаление пользователя: выбор из существующих."""
         try:
             runtime = self._entry.runtime_data
             registry = runtime.registry
@@ -245,7 +292,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     async def async_step_config_view(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Просмотр текущих секций конфига в JSON для копирования."""
         try:
             if user_input is not None:
                 return await self.async_step_init()

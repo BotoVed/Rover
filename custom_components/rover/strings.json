@@ -3,11 +3,17 @@
     "step": {
       "user": {
         "title": "Rover — установка",
-        "description": "Базовые настройки интеграции. Устройства, пользователи и просмотр конфига — в настройках после установки.",
+        "description": "Выберите тип подключения Meshtastic.",
         "data": {
+          "conn_type": "Тип подключения"
+        }
+      },
+      "serial": {
+        "title": "Serial",
+        "description": "Выберите порт Meshtastic.",
+        "data": {
+          "port": "Порт",
           "home_name": "Имя дома",
-          "conn_type": "Тип подключения",
-          "port": "Порт или адрес",
           "channel": "Имя канала Meshtastic",
           "psk": "Ключ канала (base64)",
           "hop_limit": "Hop limit",
@@ -17,7 +23,24 @@
           "push_enabled": "Отправлять инициативные обновления"
         },
         "data_description": {
-          "port": "Для serial: /dev/serial/by-id/... или /dev/ttyUSB0. Для tcp: IP:порт.",
+          "ack_timeout": "Должен быть меньше периода повторов очереди."
+        }
+      },
+      "tcp": {
+        "title": "TCP",
+        "description": "Введите адрес Meshtastic.",
+        "data": {
+          "port": "IP:порт",
+          "home_name": "Имя дома",
+          "channel": "Имя канала Meshtastic",
+          "psk": "Ключ канала (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Период повторов очереди (сек)",
+          "max_retries": "Максимум повторов",
+          "ack_timeout": "Таймаут ACK (сек)",
+          "push_enabled": "Отправлять инициативные обновления"
+        },
+        "data_description": {
           "ack_timeout": "Должен быть меньше периода повторов очереди."
         }
       }
@@ -36,11 +59,31 @@
         }
       },
       "general": {
-        "title": "Общие настройки",
+        "title": "Тип подключения",
+        "description": "Выберите тип подключения Meshtastic.",
         "data": {
+          "conn_type": "Тип подключения"
+        }
+      },
+      "general_serial": {
+        "title": "Serial — настройки",
+        "data": {
+          "port": "Порт",
           "home_name": "Имя дома",
-          "conn_type": "Тип подключения",
-          "port": "Порт или адрес",
+          "channel": "Имя канала Meshtastic",
+          "psk": "Ключ канала (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Период повторов очереди (сек)",
+          "max_retries": "Максимум повторов",
+          "ack_timeout": "Таймаут ACK (сек)",
+          "push_enabled": "Отправлять инициативные обновления"
+        }
+      },
+      "general_tcp": {
+        "title": "TCP — настройки",
+        "data": {
+          "port": "IP:порт",
+          "home_name": "Имя дома",
           "channel": "Имя канала Meshtastic",
           "psk": "Ключ канала (base64)",
           "hop_limit": "Hop limit",

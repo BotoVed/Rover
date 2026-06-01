@@ -3,11 +3,17 @@
     "step": {
       "user": {
         "title": "Rover — basic setup",
-        "description": "Basic integration settings. Devices, users and config view — in settings after installation.",
+        "description": "Select Meshtastic connection type.",
         "data": {
+          "conn_type": "Connection type"
+        }
+      },
+      "serial": {
+        "title": "Serial",
+        "description": "Select Meshtastic port.",
+        "data": {
+          "port": "Port",
           "home_name": "Home name",
-          "conn_type": "Connection type",
-          "port": "Port or address",
           "channel": "Meshtastic channel name",
           "psk": "Channel key (base64)",
           "hop_limit": "Hop limit",
@@ -17,7 +23,24 @@
           "push_enabled": "Send proactive updates"
         },
         "data_description": {
-          "port": "For serial: /dev/serial/by-id/... or /dev/ttyUSB0. For tcp: IP:port.",
+          "ack_timeout": "Must be less than the queue retry period."
+        }
+      },
+      "tcp": {
+        "title": "TCP",
+        "description": "Enter Meshtastic address.",
+        "data": {
+          "port": "IP:port",
+          "home_name": "Home name",
+          "channel": "Meshtastic channel name",
+          "psk": "Channel key (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Queue retry period (sec)",
+          "max_retries": "Max retries",
+          "ack_timeout": "ACK timeout (sec)",
+          "push_enabled": "Send proactive updates"
+        },
+        "data_description": {
           "ack_timeout": "Must be less than the queue retry period."
         }
       }
@@ -36,11 +59,31 @@
         }
       },
       "general": {
-        "title": "General settings",
+        "title": "Connection type",
+        "description": "Select Meshtastic connection type.",
         "data": {
+          "conn_type": "Connection type"
+        }
+      },
+      "general_serial": {
+        "title": "Serial settings",
+        "data": {
+          "port": "Port",
           "home_name": "Home name",
-          "conn_type": "Connection type",
-          "port": "Port or address",
+          "channel": "Meshtastic channel name",
+          "psk": "Channel key (base64)",
+          "hop_limit": "Hop limit",
+          "queue_period": "Queue retry period (sec)",
+          "max_retries": "Max retries",
+          "ack_timeout": "ACK timeout (sec)",
+          "push_enabled": "Send proactive updates"
+        }
+      },
+      "general_tcp": {
+        "title": "TCP settings",
+        "data": {
+          "port": "IP:port",
+          "home_name": "Home name",
           "channel": "Meshtastic channel name",
           "psk": "Channel key (base64)",
           "hop_limit": "Hop limit",
