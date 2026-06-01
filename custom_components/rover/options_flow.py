@@ -11,7 +11,6 @@ from serial.tools import list_ports
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
-from homeassistant.helpers import selector
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -198,14 +197,29 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 self._last_action = f"Добавлено устройств: {added_count}"
                 return await self.async_step_init()
 
+            registered = {d.entity_id for d in registry.all_devices()}
+            options = []
+            for state in self.hass.states.async_all():
+                if state.domain not in SUPPORTED_DOMAINS:
+                    continue
+                eid = state.entity_id
+                if eid in registered:
+                    continue
+                label = state.attributes.get("friendly_name", eid)
+                options.append({"value": eid, "label": f"{label} ({eid})"})
+
+            options.sort(key=lambda x: x["label"])
+            if not options:
+                self._last_action = "Нет доступных устройств для добавления"
+                return await self.async_step_init()
+
             schema = vol.Schema({
-                vol.Optional("entities", default=[]):
-                    selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=SUPPORTED_DOMAINS,
-                            multiple=True,
-                        )
-                    ),
+                vol.Required("entities"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        multiple=True,
+                    )
+                ),
             })
             return self.async_show_form(step_id="devices", data_schema=schema)
         except Exception:
