@@ -11,6 +11,7 @@ from serial.tools import list_ports
 _LOGGER = logging.getLogger(__name__)
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.helpers import selector
 from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
@@ -182,8 +183,12 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
 
             if user_input is not None:
                 selected = set(user_input.get("entities", []))
-                added_count = 0
-                for entity_id in selected:
+                current = {d.entity_id for d in registry.all_devices()}
+
+                to_add = selected - current
+                to_remove = current - selected
+
+                for entity_id in to_add:
                     state = self.hass.states.get(entity_id)
                     if state is None:
                         continue
@@ -192,34 +197,32 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                     area = state.attributes.get("area_id")
                     unit = state.attributes.get("unit_of_measurement")
                     registry.register(entity_id, domain, name, area=area, unit=unit)
-                    added_count += 1
 
-                self._last_action = f"Добавлено устройств: {added_count}"
+                for entity_id in to_remove:
+                    registry.remove_device_by_entity_id(entity_id)
+
+                added = len(to_add)
+                removed = len(to_remove)
+                parts = []
+                if added:
+                    parts.append(f"добавлено {added}")
+                if removed:
+                    parts.append(f"удалено {removed}")
+                self._last_action = (
+                    "Устройства: " + ", ".join(parts) if parts else "Устройства без изменений"
+                )
+
                 return await self.async_step_init()
 
-            registered = {d.entity_id for d in registry.all_devices()}
-            options = []
-            for state in self.hass.states.async_all():
-                if state.domain not in SUPPORTED_DOMAINS:
-                    continue
-                eid = state.entity_id
-                if eid in registered:
-                    continue
-                label = state.attributes.get("friendly_name", eid)
-                options.append({"value": eid, "label": f"{label} ({eid})"})
-
-            options.sort(key=lambda x: x["label"])
-            if not options:
-                self._last_action = "Нет доступных устройств для добавления"
-                return await self.async_step_init()
-
+            current_entity_ids = [d.entity_id for d in registry.all_devices()]
             schema = vol.Schema({
-                vol.Required("entities"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=options,
-                        multiple=True,
-                    )
-                ),
+                vol.Required("entities", default=current_entity_ids):
+                    selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SUPPORTED_DOMAINS,
+                            multiple=True,
+                        )
+                    ),
             })
             return self.async_show_form(step_id="devices", data_schema=schema)
         except Exception:

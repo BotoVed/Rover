@@ -94,8 +94,8 @@
         }
       },
       "devices": {
-        "title": "Add devices",
-        "description": "Select Home Assistant entities to add to Rover.",
+        "title": "Rover devices",
+        "description": "Select Home Assistant entities that Rover will control. Unchecking removes the device from Rover.",
         "data": {
           "entities": "Devices"
         }
