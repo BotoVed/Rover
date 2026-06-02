@@ -54,22 +54,37 @@ async def simulate_ping(hass, dispatcher) -> None:
     await dispatcher.dispatch(ping, from_node=FAKE_FROM_NODE)
 
 
-async def simulate_cmd(hass, dispatcher, registry, device_id: str, value) -> None:
-    sid_str = device_id.strip().lower().lstrip("0x")
+def _parse_device_id(raw: str) -> str | None:
+    """Parse device_id input → 4-hex registry key. Returns None if invalid."""
+    s = str(raw).strip().lower().strip('"').strip("'")
+    if not s:
+        return None
     try:
-        sid_int = int(sid_str, 16)
+        if s.startswith("0x"):
+            short_id = int(s, 16)
+        elif s.isdigit():
+            short_id = int(s, 10)
+        else:
+            short_id = int(s, 16)
     except ValueError:
-        _LOGGER.warning("[TEST CMD] Invalid device_id=%r", device_id)
+        return None
+    if not (0 <= short_id <= 0xFFFF):
+        return None
+    return f"{short_id:04x}"
+
+
+async def simulate_cmd(hass, dispatcher, registry, device_id: str, value) -> None:
+    sid_str = _parse_device_id(device_id)
+    if sid_str is None:
+        _LOGGER.warning("[TEST CMD] Invalid device_id=%r. Use decimal (49283) or hex (c083, 0xc083).",
+                        device_id)
         return
 
-    dev = None
-    for d in registry.all_devices():
-        if d.short_id == sid_int:
-            dev = d
-            break
+    sid_int = int(sid_str, 16)
+    dev = registry.get_by_short_id(sid_int)
 
     if dev is None:
-        _LOGGER.warning("[TEST CMD] Device id=0x%s not found. Available: %s",
+        _LOGGER.warning("[TEST CMD] Device id=%s not found. Available: %s",
                         sid_str, [f"0x{d.short_id:04x}={d.t}" for d in registry.all_devices()])
         return
 

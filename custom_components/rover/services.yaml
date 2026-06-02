@@ -15,10 +15,11 @@ test_cmd:
     B — value ignored (always press).
   fields:
     device_id:
-      name: Device short_id
-      description: 4-hex short_id of the device (e.g. "9f83"). See rover_registry.json.
+      name: Device id
+      description: >
+        Decimal id as declared (e.g. 49283), or hex short_id (c083 / 0xc083).
       required: true
-      example: "9f83"
+      example: "49283"
       selector:
         text:
     value:
