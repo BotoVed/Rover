@@ -1,0 +1,30 @@
+test_ping:
+  name: Rover test PING
+  description: Simulate incoming PING packet from a fake node. Used to verify PONG generation.
+
+test_cmd:
+  name: Rover test CMD
+  description: >
+    Simulate incoming CMD packet for a registered device.
+    Fields depend on device type (const.py device codes):
+    SW/L/S/BS/F/SI — value=true/false toggles on/off.
+    LK — value=true locks, false unlocks.
+    CV — value=open/close/stop.
+    A — value=arm_home/arm_away/arm_night/disarm.
+    C/WH/H — value=<float> sets setpoint.
+    B — value ignored (always press).
+  fields:
+    device_id:
+      name: Device short_id
+      description: 4-hex short_id of the device (e.g. "9f83"). See rover_registry.json.
+      required: true
+      example: "9f83"
+      selector:
+        text:
+    value:
+      name: Value
+      description: Type-dependent (on/off, command, or setpoint). See service description.
+      required: false
+      example: "true"
+      selector:
+        text:

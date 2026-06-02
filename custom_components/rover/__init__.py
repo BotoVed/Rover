@@ -211,7 +211,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
 
     _LOGGER.info("Rover: entry %s ready", entry.entry_id)
+
+    await _async_register_test_services(hass, entry)
+
     return True
+
+
+async def _async_register_test_services(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Register rover.test_ping and rover.test_cmd. Idempotent."""
+    if hass.services.has_service(DOMAIN, "test_ping"):
+        return
+
+    from homeassistant.core import ServiceCall
+
+    async def handle_test_ping(call: ServiceCall) -> None:
+        from .test_e2e import simulate_ping
+        entries = hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            _LOGGER.warning("[TEST PING] No Rover entries configured")
+            return
+        rt = entries[0].runtime_data
+        await simulate_ping(hass, rt.dispatcher)
+
+    async def handle_test_cmd(call: ServiceCall) -> None:
+        from .test_e2e import simulate_cmd
+        entries = hass.config_entries.async_entries(DOMAIN)
+        if not entries:
+            _LOGGER.warning("[TEST CMD] No Rover entries configured")
+            return
+        rt = entries[0].runtime_data
+        device_id = call.data["device_id"]
+        value = call.data.get("value")
+        await simulate_cmd(hass, rt.dispatcher, rt.registry, device_id, value)
+
+    hass.services.async_register(DOMAIN, "test_ping", handle_test_ping)
+    hass.services.async_register(DOMAIN, "test_cmd", handle_test_cmd)
+    _LOGGER.info("Rover test services registered")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -234,6 +269,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     registry_path = hass.config.path(f"{DOMAIN}_registry.json")
     await data.registry.save(registry_path)
+
+    if not hass.config_entries.async_entries(DOMAIN):
+        hass.services.async_remove(DOMAIN, "test_ping")
+        hass.services.async_remove(DOMAIN, "test_cmd")
 
     return True
 
