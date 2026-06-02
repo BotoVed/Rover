@@ -100,7 +100,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         try:
             return self.async_show_menu(
                 step_id="init",
-                menu_options=["general", "devices", "users_menu", "config_view"],
+                menu_options=["general", "devices", "users_menu", "config_view", "test"],
                 description_placeholders={
                     "last_action": self._last_action or "",
                 },
@@ -366,3 +366,20 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         except Exception:
             _LOGGER.exception("Rover options_flow async_step_config_view failed")
             raise
+
+    # ---------- E2E тест ----------
+
+    async def async_step_test(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        try:
+            from .test_e2e import run_e2e_test
+
+            runtime = self._runtime()
+            await run_e2e_test(self.hass, runtime.transport, runtime.registry)
+            self._last_action = "🧪 Тест выполнен — смотри логи"
+            return await self.async_step_init()
+        except Exception:
+            _LOGGER.exception("Rover E2E test failed")
+            self._last_action = "🧪 Тест упал — смотри логи"
+            return await self.async_step_init()

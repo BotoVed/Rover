@@ -125,6 +125,21 @@ class Transport:
         except Exception:
             _LOGGER.exception("Error handling received packet: %s", packet)
 
+    def send_raw(self, payload: bytes) -> None:
+        """Send raw bytes immediately, bypassing queue. For testing only."""
+        if self._interface is None:
+            _LOGGER.warning("[TEST] send_raw: no interface")
+            return
+        try:
+            self._interface.sendData(
+                payload,
+                portNum=MESHTASTIC_PRIVATE_APP_PORT,
+                wantAck=False,
+            )
+            _LOGGER.debug("[TEST] send_raw: sent %d bytes", len(payload))
+        except Exception:
+            _LOGGER.exception("[TEST] send_raw failed")
+
     async def send(self, payload: bytes, want_ack: bool = True) -> int | None:
         if not self._connected or not self._interface:
             _LOGGER.warning("Transport: cannot send, not connected")
