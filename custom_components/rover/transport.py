@@ -4,6 +4,8 @@ import asyncio
 import logging
 from typing import Any, Callable
 
+from pubsub import pub
+
 from .const import MESHTASTIC_BROADCAST_ADDR, MESHTASTIC_PRIVATE_APP_PORT
 
 _LOGGER = logging.getLogger(__name__)
@@ -51,7 +53,9 @@ class Transport:
                     self._interface = serial_interface.SerialInterface(self._port)
                 elif self._connection_type == "tcp":
                     self._interface = tcp_interface.TCPInterface(hostname=self._port)
-                self._interface.onReceive = self._handle_receive
+                pub.subscribe(self._handle_receive, "meshtastic.receive")
+                pub.subscribe(self._handle_connected, "meshtastic.connection.established")
+                pub.subscribe(self._handle_lost, "meshtastic.connection.lost")
                 self._loop = loop
 
             await loop.run_in_executor(None, _connect)
@@ -68,41 +72,42 @@ class Transport:
             self._start_reconnect_loop()
             return False
 
-    def _handle_receive(self, packet: Any, interface: Any = None) -> None:
+    def _handle_connected(self, interface=None, topic=None) -> None:
+        _LOGGER.info("Meshtastic connection established")
+
+    def _handle_lost(self, interface=None, topic=None) -> None:
+        _LOGGER.warning("Meshtastic connection lost — will retry")
+        self._mark_disconnected()
+
+    def _normalize_portnum(self, portnum: Any) -> int:
+        if isinstance(portnum, int):
+            return portnum
+        if isinstance(portnum, str):
+            try:
+                from meshtastic.protobuf import portnums_pb2
+                return portnums_pb2.PortNum.Value(portnum)
+            except (ValueError, ImportError):
+                pass
+        return -1
+
+    def _handle_receive(self, packet: dict, interface: Any = None) -> None:
         if not self._connected:
             return
 
         from meshtastic.protobuf import portnums_pb2
 
         try:
-            if isinstance(packet, dict):
-                decoded = packet.get("decoded", {})
-                if isinstance(decoded, dict):
-                    from_port = decoded.get("portnum", 0)
-                    from_node = packet.get("from", 0)
-                else:
-                    from_port = getattr(decoded, "portnum", 0)
-                    from_node = packet.get("from", 0)
-            else:
-                decoded = getattr(packet, "decoded", None)
-                from_port = getattr(decoded, "portnum", 0) if decoded else 0
-                from_node = getattr(packet, "fromId", getattr(packet, "from", 0))
+            decoded = packet.get("decoded", {}) or {}
+            from_port = self._normalize_portnum(decoded.get("portnum", 0))
+            from_node = packet.get("from", 0)
 
             _LOGGER.debug("Raw packet: port=%s from=%s", from_port, from_node)
 
             if from_port == portnums_pb2.ROUTING_APP:
-                if isinstance(decoded, dict):
-                    routing = decoded.get("routing", {})
-                else:
-                    routing = getattr(decoded, "routing", None) if decoded else {}
-                if isinstance(routing, dict):
-                    request_id = routing.get("requestId", 0)
-                    error_reason = routing.get("errorReason", routing.get("error"))
-                    success = error_reason is None or error_reason == "NONE" or error_reason == 0
-                else:
-                    request_id = getattr(routing, "requestId", 0)
-                    error_reason = getattr(routing, "errorReason", getattr(routing, "error", None))
-                    success = not error_reason or str(error_reason) == "NONE"
+                routing = decoded.get("routing", {}) or {}
+                request_id = routing.get("requestId", 0)
+                error_reason = routing.get("errorReason", routing.get("error"))
+                success = error_reason is None or error_reason == "NONE" or error_reason == 0
 
                 if request_id and self._on_ack and self._loop:
                     _LOGGER.debug("Routing: request_id=%s success=%s error=%s",
@@ -111,10 +116,7 @@ class Transport:
                 return
 
             if from_port == MESHTASTIC_PRIVATE_APP_PORT:
-                if isinstance(decoded, dict):
-                    payload = decoded.get("payload", b"")
-                else:
-                    payload = getattr(decoded, "payload", getattr(decoded, "data", b"")) if decoded else b""
+                payload = decoded.get("payload", b"")
                 if isinstance(payload, str):
                     payload = payload.encode("latin-1")
                 if payload and self._on_packet and self._loop:
@@ -153,6 +155,7 @@ class Transport:
 
     async def disconnect(self) -> None:
         self._stop_reconnect_loop()
+        self._unsubscribe_pubsub()
         if self._interface:
             try:
                 await asyncio.get_running_loop().run_in_executor(
@@ -162,6 +165,14 @@ class Transport:
                 pass
             self._interface = None
         self._connected = False
+
+    def _unsubscribe_pubsub(self) -> None:
+        try:
+            pub.unsubscribe(self._handle_receive, "meshtastic.receive")
+            pub.unsubscribe(self._handle_connected, "meshtastic.connection.established")
+            pub.unsubscribe(self._handle_lost, "meshtastic.connection.lost")
+        except Exception:
+            pass
 
     def check_alive(self) -> None:
         if not self._connected or not self._interface:
@@ -177,6 +188,7 @@ class Transport:
         if not self._connected:
             return
         self._connected = False
+        self._unsubscribe_pubsub()
         if self._interface:
             try:
                 self._interface.close()
