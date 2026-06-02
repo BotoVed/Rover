@@ -376,7 +376,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             from .test_e2e import run_e2e_test
 
             runtime = self._runtime()
-            await run_e2e_test(self.hass, runtime.transport, runtime.registry)
+            await run_e2e_test(self.hass, runtime.transport, runtime.registry, runtime.dispatcher)
             self._last_action = "🧪 Тест выполнен — смотри логи"
             return await self.async_step_init()
         except Exception:
