@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rover",
+        "description": "Rover создаст Reticulum-идентичность и подготовит mesh-транспорт. Устройства и пульты настраиваются в параметрах интеграции."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Разрешена только одна интеграция Rover."
+    }
+  }
+}

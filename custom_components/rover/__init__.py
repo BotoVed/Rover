@@ -1,6 +1,8 @@
 """Rover — Remote Over Radio for Home Assistant."""
 from __future__ import annotations
 
+__version__ = "0.3.4"
+
 import logging
 import os
 
@@ -43,7 +45,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.runtime_data = runtime
 
-    _LOGGER.info("Rover %s setup complete", entry.version)
+    _LOGGER.info("Rover %s setup complete", __version__)
     return True
 
 
