@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Rover",
+        "description": "Rover will create a Reticulum identity and prepare the mesh transport. You can add devices and manage remotes in the integration options."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Rover instance is allowed."
+    }
+  }
+}
