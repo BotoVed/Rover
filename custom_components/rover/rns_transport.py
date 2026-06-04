@@ -48,21 +48,21 @@ class RoverTransport:
             )
             self._identity = identity
 
-            # RNS.Reticulum.__init__ calls signal.signal() which raises
-            # ValueError when called from a non-main thread (HA worker pool).
-            # Patch signal.signal to a no-op during init to work around this.
+            # Both RNS.Reticulum.__init__ and LXMF.LXMRouter.__init__
+            # call signal.signal() which raises ValueError from a
+            # non-main thread (HA worker pool). Patch to a no-op.
             _orig_signal = signal_module.signal
             signal_module.signal = lambda signum, handler: None
             try:
                 RNS.Reticulum(configdir=self._config_dir)
+                self._logger.info("RNS init configdir=%s", self._config_dir)
+
+                router = LXMF.LXMRouter(
+                    identity=self._identity,
+                    storagepath=os.path.join(self._config_dir, "lxmf_storage"),
+                )
             finally:
                 signal_module.signal = _orig_signal
-            self._logger.info("RNS init configdir=%s", self._config_dir)
-
-            router = LXMF.LXMRouter(
-                identity=self._identity,
-                storagepath=os.path.join(self._config_dir, "lxmf_storage"),
-            )
             self._logger.info("LXMF router started")
             self._router = router
 
