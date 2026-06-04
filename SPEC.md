@@ -107,21 +107,55 @@ LXMF определяет следующие поля:
 
 **Python API (LXMF ≥0.9.6):**
 ```python
-router = LXMF.LXMRouter(identity=identity, storagepath=path)
-dest = router.register_delivery_identity(identity, display_name="Rover Hub")
-
-msg = LXMF.LXMessage(
-    destination=remote_dest,  # RNS.Destination или bytes hash
-    source=identity,
-    content=b"",
-    title=b"",
-    desired_method=LXMF.LXMessage.DIRECT
+# Инициализация (один раз при старте интеграции)
+RNS.Reticulum(configdir=path)
+router = LXMF.LXMRouter(storagepath=path, enforce_stamps=False)
+local_identity = RNS.Identity()  # или загруженная из файла
+local_delivery_dest = router.register_delivery_identity(
+    local_identity,
+    display_name="Rover Hub"
 )
-msg.fields = {"tp": 3, "id": 123, "v": "on"}
-msg.register_delivery_callback(on_delivered)
-msg.register_failed_callback(on_failed)
-router.handle_outbound(msg)
+router.register_delivery_callback(on_inbound_message)
+
+# Отправка сообщения конкретному remote
+def send_message(remote_hash: bytes, fields: dict) -> bool:
+    # 1) Получить identity получателя через recall.
+    #    Identity появляется в кеше после announce от remote.
+    remote_identity = RNS.Identity.recall(remote_hash)
+    if remote_identity is None:
+        # Путь и identity ещё неизвестны — запросить
+        RNS.Transport.request_path(remote_hash)
+        return False  # сообщение не отправлено, попробовать позже
+
+    # 2) Собрать Destination на стороне отправителя
+    remote_dest = RNS.Destination(
+        remote_identity,
+        RNS.Destination.OUT,
+        RNS.Destination.SINGLE,
+        "lxmf", "delivery"
+    )
+
+    # 3) Создать LXMessage. content/title — пустые (наш payload в fields)
+    msg = LXMF.LXMessage(
+        remote_dest,
+        local_delivery_dest,
+        "",  # content
+        "",  # title
+        desired_method=LXMF.LXMessage.DIRECT
+    )
+    msg.fields = fields  # msgpack-словарь с tp и type-specific полями
+
+    msg.register_delivery_callback(on_delivered)
+    msg.register_failed_callback(on_failed)
+
+    # 4) Передать роутеру — он сам сделает упаковку, шифрование, retry
+    router.handle_outbound(msg)
+    return True
 ```
+
+**Важно:** `destination` в `LXMessage(...)` — это **только `RNS.Destination` объект**, не bytes-hash. Reticulum требует знать публичный ключ получателя для шифрования. Identity появляется в локальном кеше после `announce` от remote или после успешного `RNS.Transport.request_path(...)`. Если identity ещё не известна — сообщение отправить нельзя, нужно подождать path discovery (обычно секунды-минуты в зависимости от mesh-сети).
+
+На практике это означает: первое сообщение к новому remote может потребовать предварительного `request_path` и небольшой задержки. Логика отправки в `rns_transport.py` должна это учитывать — например, ставить сообщение в локальную очередь и повторять попытку через 3-5 секунд (но не накапливая бесконечно — см. DECISIONS 055).
 
 ---
 
