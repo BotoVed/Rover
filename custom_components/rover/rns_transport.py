@@ -48,14 +48,16 @@ class RoverTransport:
             )
             self._identity = identity
 
-            # Both RNS.Reticulum.__init__ and LXMF.LXMRouter.__init__
-            # call signal.signal() which raises ValueError from a
-            # non-main thread (HA worker pool). Patch to a no-op.
+            # Both RNS.Reticulum and LXMF.LXMRouter call signal.signal()
+            # in their __init__, which raises from a worker thread.
             _orig_signal = signal_module.signal
             signal_module.signal = lambda signum, handler: None
             try:
-                RNS.Reticulum(configdir=self._config_dir)
-                self._logger.info("RNS init configdir=%s", self._config_dir)
+                if getattr(RNS, "reticulum", None) is None:
+                    RNS.Reticulum(configdir=self._config_dir)
+                    self._logger.info("RNS init configdir=%s", self._config_dir)
+                else:
+                    self._logger.info("RNS already initialised, reusing")
 
                 router = LXMF.LXMRouter(
                     identity=self._identity,
@@ -186,10 +188,6 @@ class RoverTransport:
                 except Exception:
                     pass
                 self._router = None
-            try:
-                RNS.reticulum.exit_handler()
-            except Exception:
-                pass
 
         await self._hass.async_add_executor_job(_do_shutdown)
         self._logger.info("Transport shutdown complete")
