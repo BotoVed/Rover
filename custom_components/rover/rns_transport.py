@@ -114,14 +114,30 @@ class RoverTransport:
         fields: dict,
         delivery_callback: Callable | None = None,
         failed_callback: Callable | None = None,
-    ) -> None:
+    ) -> bool:
         dst_bytes = bytes.fromhex(destination_hash_hex)
         trace = os.urandom(4).hex()
 
+        remote_identity = RNS.Identity.recall(dst_bytes)
+        if remote_identity is None:
+            RNS.Transport.request_path(dst_bytes)
+            self._logger.warning(
+                "OUT [%s] dst=%s... identity not in cache, requested path",
+                trace, destination_hash_hex[:8],
+            )
+            return False
+
+        remote_dest = RNS.Destination(
+            remote_identity,
+            RNS.Destination.OUT,
+            RNS.Destination.SINGLE,
+            "lxmf", "delivery",
+        )
+
         def _do_send():
             msg = LXMF.LXMessage(
-                destination=dst_bytes,
-                source=self._identity,
+                destination=remote_dest,
+                source=self._delivery_dest,
                 content=b"",
                 title=b"",
                 desired_method=LXMF.LXMessage.DIRECT,
@@ -137,13 +153,13 @@ class RoverTransport:
 
             self._router.handle_outbound(msg)
 
-            dst_hex = dst_bytes.hex()
             self._logger.debug(
                 "OUT [%s] dst=%s... fields_keys=%s",
-                trace, dst_hex[:8], list(fields.keys()),
+                trace, destination_hash_hex[:8], list(fields.keys()),
             )
 
         await self._hass.async_add_executor_job(_do_send)
+        return True
 
     def _on_delivery(self, message: LXMF.LXMessage, trace: str) -> None:
         self._logger.debug("DELIVERY [%s] state=DELIVERED", trace)

@@ -1,4 +1,25 @@
 """Pytest fixtures for Rover tests."""
+import sys
+from unittest.mock import MagicMock
+
+# Mock RNS/LXMF before any rover module imports trigger rns_transport.
+# rns_transport imports LXMF and RNS at module level; they are not
+# installed in the CI/test environment (only on HAOS via HACS deps).
+RNSMock = MagicMock()
+RNSMock.Identity.recall = MagicMock(return_value=None)
+RNSMock.Transport.request_path = MagicMock()
+RNSMock.Destination.OUT = 0
+RNSMock.Destination.SINGLE = 0
+
+sys.modules["RNS"] = RNSMock
+
+LXMFMock = MagicMock()
+LXMFMock.LXMRouter = MagicMock()
+LXMFMock.LXMessage = MagicMock()
+LXMFMock.LXMessage.DIRECT = 0
+
+sys.modules["LXMF"] = LXMFMock
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
