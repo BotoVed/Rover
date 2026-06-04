@@ -1,0 +1,89 @@
+set_loglevel:
+  name: "Rover — Set log level"
+  description: Temporarily change Rover log level. Returns to production defaults after the given duration.
+  fields:
+    level:
+      name: Level
+      required: true
+      example: debug
+      selector:
+        select:
+          options:
+            - debug
+            - info
+            - warning
+            - error
+    duration_minutes:
+      name: Duration (minutes)
+      default: 30
+      example: 30
+      selector:
+        number:
+          min: 1
+          max: 1440
+          mode: box
+
+send_test_message:
+  name: "Rover — Send test message"
+  description: Send a real LXMF message via Reticulum. Use 'self' as destination_hash for loopback test.
+  fields:
+    destination_hash:
+      name: Destination hash
+      description: 32-hex Reticulum destination, or the string 'self' to send to own identity.
+      required: true
+      example: "fa3ee51762b59a587da700b64b75b0bf"
+      selector:
+        text:
+    tp:
+      name: Message type
+      description: Protocol message type (2..9 per SPEC §6).
+      required: true
+      example: 6
+      selector:
+        number:
+          min: 2
+          max: 9
+          mode: box
+    payload:
+      name: Payload
+      description: JSON object — the fields content of the message (excluding tp).
+      example: '{"h": {"m": "0000", "u": "0000", "a": "0000", "d": "0000"}}'
+      selector:
+        object:
+
+simulate_inbound:
+  name: "Rover — Simulate inbound message"
+  description: Inject a message directly into the dispatcher, bypassing the LXMF transport. For testing handlers without Rover-App.
+  fields:
+    source_hash:
+      name: Source hash
+      description: 32-hex Reticulum identity simulated as the sender.
+      required: true
+      example: "aabbccddeeff00112233445566778899"
+      selector:
+        text:
+    tp:
+      name: Message type
+      required: true
+      example: 5
+      selector:
+        number:
+          min: 2
+          max: 9
+          mode: box
+    payload:
+      name: Payload
+      description: JSON object — fields content excluding tp.
+      example: '{"id": 1, "s": true}'
+      selector:
+        object:
+    authorized:
+      name: Authorized
+      description: Temporarily treat source_hash as approved (added+removed for this call only).
+      default: false
+      selector:
+        boolean:
+
+dump_registry:
+  name: "Rover — Dump registry"
+  description: Log the current registry state (meta, users, areas, devices, pending) to the HA log for diagnosis.
