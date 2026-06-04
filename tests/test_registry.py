@@ -1,5 +1,6 @@
 """Tests for registry.py."""
 import pytest
+import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.rover.registry import RoverRegistry
@@ -14,7 +15,7 @@ def mock_hass():
     return hass
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def registry(mock_hass):
     with patch("custom_components.rover.registry.Store") as MockStore:
         store = AsyncMock()
