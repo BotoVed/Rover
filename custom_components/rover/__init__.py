@@ -6,6 +6,8 @@ __version__ = "0.3.5"
 import logging
 import os
 
+import voluptuous as cv
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
@@ -13,6 +15,8 @@ from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN, LOGGER_ROOT
 from .registry import RoverRegistry
 from .rns_transport import RoverTransport
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _LOGGER = logging.getLogger(LOGGER_ROOT)
 
