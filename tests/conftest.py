@@ -20,6 +20,12 @@ LXMFMock.LXMessage.DIRECT = 0
 
 sys.modules["LXMF"] = LXMFMock
 
+# Mock homeassistant.helpers.config_validation for local test env.
+# On CI homeassistant is installed and the real module is used.
+cv_mock = MagicMock()
+cv_mock.config_entry_only_config_schema = MagicMock(return_value={})
+sys.modules["homeassistant.helpers.config_validation"] = cv_mock
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 

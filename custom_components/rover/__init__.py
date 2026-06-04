@@ -6,10 +6,9 @@ __version__ = "0.3.5"
 import logging
 import os
 
-import voluptuous as cv
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, LOGGER_ROOT
