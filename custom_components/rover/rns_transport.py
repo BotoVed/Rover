@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+import signal as signal_module
 from typing import Callable
 
 import RNS
@@ -47,7 +48,15 @@ class RoverTransport:
             )
             self._identity = identity
 
-            RNS.Reticulum(configdir=self._config_dir)
+            # RNS.Reticulum.__init__ calls signal.signal() which raises
+            # ValueError when called from a non-main thread (HA worker pool).
+            # Patch signal.signal to a no-op during init to work around this.
+            _orig_signal = signal_module.signal
+            signal_module.signal = lambda signum, handler: None
+            try:
+                RNS.Reticulum(configdir=self._config_dir)
+            finally:
+                signal_module.signal = _orig_signal
             self._logger.info("RNS init configdir=%s", self._config_dir)
 
             router = LXMF.LXMRouter(
