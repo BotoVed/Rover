@@ -16,6 +16,9 @@ dev = [
     "pytest-homeassistant-custom-component",
 ]
 
+[tool.setuptools.packages.find]
+include = ["custom_components*"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
