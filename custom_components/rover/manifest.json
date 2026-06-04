@@ -6,6 +6,7 @@
   "issue_tracker": "https://github.com/BotoVed/Rover/issues",
   "codeowners": ["@BotoVed"],
   "requirements": [
+    "msgpack>=1.0",
     "rns>=1.2.0",
     "lxmf>=0.9.6"
   ],
