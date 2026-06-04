@@ -9,5 +9,101 @@
     "abort": {
       "single_instance_allowed": "Only one Rover instance is allowed."
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Rover settings",
+        "menu_options": {
+          "general": "General",
+          "devices": "Devices",
+          "users": "Users",
+          "pending": "Pending requests",
+          "config": "Configuration & QR"
+        }
+      },
+      "general": {
+        "title": "General settings",
+        "data": {
+          "server_name": "Server display name"
+        }
+      },
+      "devices": {
+        "title": "Devices",
+        "description": "Select which Home Assistant entities Rover should expose to remotes."
+      },
+      "users": {
+        "title": "Active remotes",
+        "description": "Approved remotes ({active}/{max}). Remove a remote to free a slot."
+      },
+      "pending": {
+        "title": "Pending registration requests",
+        "description": "{count} request(s) waiting for approval. New requests go here when at least one owner exists."
+      },
+      "config": {
+        "title": "Configuration & QR",
+        "description": "Scan this QR code from Rover-App to add this server. Export identity for backup or migration."
+      }
+    }
+  },
+  "services": {
+    "set_loglevel": {
+      "name": "Set log level",
+      "description": "Temporarily change Rover log level.",
+      "fields": {
+        "level": {
+          "name": "Level",
+          "description": "Log level: debug, info, warning, error."
+        },
+        "duration_minutes": {
+          "name": "Duration (minutes)",
+          "description": "How long to keep the new level before reverting to defaults."
+        }
+      }
+    },
+    "send_test_message": {
+      "name": "Send test message",
+      "description": "Send a real LXMF message through the Reticulum stack (use 'self' for loopback).",
+      "fields": {
+        "destination_hash": {
+          "name": "Destination hash",
+          "description": "Hex string (32 chars) or 'self' for loopback."
+        },
+        "tp": {
+          "name": "Message type",
+          "description": "Protocol message type (2-9)."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON object — the fields content of the message."
+        }
+      }
+    },
+    "simulate_inbound": {
+      "name": "Simulate inbound message",
+      "description": "Inject a message directly into dispatcher, bypassing transport.",
+      "fields": {
+        "source_hash": {
+          "name": "Source hash",
+          "description": "Hex string (32 chars) — the simulated sender identity."
+        },
+        "tp": {
+          "name": "Message type",
+          "description": "Protocol message type (2-9)."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON object — fields content."
+        },
+        "authorized": {
+          "name": "Authorized",
+          "description": "Temporarily treat source_hash as approved for this message."
+        }
+      }
+    },
+    "dump_registry": {
+      "name": "Dump registry",
+      "description": "Log the current registry state for debugging."
+    }
   }
 }

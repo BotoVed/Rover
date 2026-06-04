@@ -3,11 +3,107 @@
     "step": {
       "user": {
         "title": "Rover",
-        "description": "Rover создаст Reticulum-идентичность и подготовит mesh-транспорт. Устройства и пульты настраиваются в параметрах интеграции."
+        "description": "Rover создаст identity Reticulum и подготовит mesh-транспорт. Устройства и пульты добавляются в настройках интеграции."
       }
     },
     "abort": {
-      "single_instance_allowed": "Разрешена только одна интеграция Rover."
+      "single_instance_allowed": "Разрешён только один экземпляр Rover."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Настройки Rover",
+        "menu_options": {
+          "general": "Общие",
+          "devices": "Устройства",
+          "users": "Пользователи",
+          "pending": "Запросы на регистрацию",
+          "config": "Конфигурация и QR"
+        }
+      },
+      "general": {
+        "title": "Общие настройки",
+        "data": {
+          "server_name": "Отображаемое имя сервера"
+        }
+      },
+      "devices": {
+        "title": "Устройства",
+        "description": "Выберите какие entity Home Assistant нужно открыть для пультов."
+      },
+      "users": {
+        "title": "Активные пульты",
+        "description": "Одобренные пульты ({active}/{max}). Удалите пульт, чтобы освободить место."
+      },
+      "pending": {
+        "title": "Запросы на регистрацию",
+        "description": "{count} запрос(ов) ждёт одобрения. Запросы попадают сюда когда уже есть owner."
+      },
+      "config": {
+        "title": "Конфигурация и QR",
+        "description": "Отсканируйте QR-код в Rover-App чтобы добавить этот сервер. Экспортируйте identity для резервной копии или переноса."
+      }
+    }
+  },
+  "services": {
+    "set_loglevel": {
+      "name": "Уровень логирования",
+      "description": "Временно изменить уровень логирования Rover.",
+      "fields": {
+        "level": {
+          "name": "Уровень",
+          "description": "Уровень: debug, info, warning, error."
+        },
+        "duration_minutes": {
+          "name": "Длительность (минуты)",
+          "description": "Через сколько вернуть уровень к умолчанию."
+        }
+      }
+    },
+    "send_test_message": {
+      "name": "Отправить тестовое сообщение",
+      "description": "Реально отправить LXMF-сообщение через Reticulum stack (используйте 'self' для loopback).",
+      "fields": {
+        "destination_hash": {
+          "name": "Destination hash",
+          "description": "Hex-строка (32 символа) или 'self' для loopback."
+        },
+        "tp": {
+          "name": "Тип сообщения",
+          "description": "Тип протокола (2-9)."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON-объект — содержимое fields."
+        }
+      }
+    },
+    "simulate_inbound": {
+      "name": "Симулировать входящее сообщение",
+      "description": "Впрыснуть сообщение прямо в dispatcher, минуя транспорт.",
+      "fields": {
+        "source_hash": {
+          "name": "Source hash",
+          "description": "Hex-строка (32 символа) — identity отправителя."
+        },
+        "tp": {
+          "name": "Тип сообщения",
+          "description": "Тип протокола (2-9)."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "JSON-объект — содержимое fields."
+        },
+        "authorized": {
+          "name": "Авторизован",
+          "description": "Временно считать source_hash одобренным."
+        }
+      }
+    },
+    "dump_registry": {
+      "name": "Выгрузить реестр",
+      "description": "Записать текущее состояние реестра в лог для диагностики."
     }
   }
 }
