@@ -46,7 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     config_dir = os.path.join(
         hass.config.config_dir, "custom_components", DOMAIN, ".reticulum"
     )
-    await hass.async_add_executor_job(os.makedirs, config_dir, True)
+    await hass.async_add_executor_job(lambda: os.makedirs(config_dir, exist_ok=True))
 
     # 3. Stub callback for incoming messages.
     # In Phase 2 this will be replaced by handlers.dispatcher.
