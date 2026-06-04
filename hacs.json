@@ -1,8 +1,7 @@
 {
   "name": "Rover",
-  "homeassistant": "2024.1.0",
-  "country": ["RU"],
-  "render_readme": true,
   "zip_release": true,
-  "filename": "rover.zip"
+  "filename": "rover.zip",
+  "render_readme": true,
+  "homeassistant": "2026.4.0"
 }
