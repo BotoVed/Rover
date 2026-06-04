@@ -53,11 +53,11 @@ class RoverTransport:
             _orig_signal = signal_module.signal
             signal_module.signal = lambda signum, handler: None
             try:
-                if getattr(RNS, "reticulum", None) is None:
+                try:
                     RNS.Reticulum(configdir=self._config_dir)
                     self._logger.info("RNS init configdir=%s", self._config_dir)
-                else:
-                    self._logger.info("RNS already initialised, reusing")
+                except OSError:
+                    self._logger.warning("RNS already running, reusing")
 
                 router = LXMF.LXMRouter(
                     identity=self._identity,
