@@ -43,11 +43,11 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
     """Multi-step options flow for Rover."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
+        self._config_entry = config_entry
 
     @property
     def _runtime(self):
-        return self.config_entry.runtime_data
+        return self._config_entry.runtime_data
 
     @property
     def _registry(self):
