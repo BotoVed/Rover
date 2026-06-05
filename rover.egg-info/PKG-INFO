@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: rover
+Version: 0.3.6
+Summary: Rover — Remote Over Radio для Home Assistant
+Requires-Python: >=3.12
+License-File: LICENSE
+Requires-Dist: msgpack>=1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21; extra == "dev"
+Requires-Dist: voluptuous>=0.13; extra == "dev"
+Requires-Dist: homeassistant<2026.3,>=2024.12; extra == "dev"
+Requires-Dist: pytest-homeassistant-custom-component; extra == "dev"
+Dynamic: license-file

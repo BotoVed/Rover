@@ -18,7 +18,7 @@
           "general": "Общие",
           "devices": "Добавить устройства",
           "device_remove": "Удалить устройства",
-          "device_test": "Проверить устройство",
+          "test_device": "Тест устройства",
           "users": "Активные пульты",
           "pending": "Запросы на регистрацию",
           "config": "Сервер и QR"
@@ -32,23 +32,29 @@
       },
       "devices": {
         "title": "Добавить устройства",
-        "description": "Зарегистрировано устройств: {count}.\n{device_list}\n\nВыберите новые entity HA для проброса. Уже зарегистрированные будут пропущены.",
+        "description": "Выберите entity HA для проброса через Rover. Уже зарегистрированные будут пропущены.\n\nЗарегистрировано ({count}):\n{device_list}",
         "data": {
           "entities": "Сущности"
         }
       },
       "device_remove": {
         "title": "Удалить устройства",
-        "description": "Зарегистрировано: {count}. Выберите устройства для удаления.",
+        "description": "Зарегистрировано ({count}):\n{device_list}\n\nВыберите устройства для удаления.",
         "data": {
           "device_ids": "Устройства"
         }
       },
-      "device_test": {
-        "title": "Проверить устройство",
-        "description": "Устройств: {count}. Выберите устройство и действие для проверки.",
+      "test_device": {
+        "title": "Тест устройства",
+        "description": "Доступные для теста устройства:\n{device_list}",
         "data": {
-          "device_id": "Устройство",
+          "device_id": "Устройство"
+        }
+      },
+      "test_action": {
+        "title": "Выбрать действие",
+        "description": "Цель: {device}",
+        "data": {
           "action": "Действие"
         }
       },
@@ -69,7 +75,7 @@
       },
       "config": {
         "title": "Сервер",
-        "description": "![QR]({qr_image})\n\n**Сервер:** {server_name}  \n**Версия:** {version}  \n**Устройств:** {device_count}  \n**Пультов:** {user_count}  \n\n**Identity hash (вставить в Rover-App):**\n```\n{identity}\n```\n\n**QR payload (JSON):**\n```json\n{qr_payload}\n```"
+        "description": "Имя сервера: {server_name}\nВерсия: {version}\n\nIdentity hash:\n`{identity}`\n\nОтсканируйте этот QR в Rover-App:\n\n```\n{qr_image}\n```\n\nИли скопируйте JSON:\n\n`{qr_payload}`"
       }
     }
   },

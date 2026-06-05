@@ -1,12 +1,6 @@
-"""Options flow for Rover integration.
-
-Menu structure:
-  init / general / devices / device_remove / device_test / users / pending / config
-"""
+"""Options flow for Rover integration."""
 from __future__ import annotations
 
-import base64
-import io
 import json
 import logging
 from typing import Any
@@ -29,7 +23,6 @@ from .const import (
     DOMAIN_TO_TYPE,
     LOGGER_ROOT,
     MAX_ACTIVE_REMOTES,
-    MAX_PENDING_REMOTES,
     QR_FORMAT_VERSION,
     TYPE_DEFS,
 )
@@ -40,44 +33,59 @@ SUPPORTED_DOMAINS = sorted(
     {v["domain"] for v in TYPE_DEFS.values()} | {"binary_sensor"}
 )
 
-_DEVICE_ACTIONS = {
-    "turn_on": "Turn on",
-    "turn_off": "Turn off",
-    "press": "Press (button)",
-    "toggle": "Toggle",
-}
-
-_QR_IMAGE_CACHE: dict[str, str] = {}
+TESTABLE_BOOL_TYPES = {"SW", "LT", "LK", "FN"}
+TESTABLE_ACTIVATION_TYPES = {"SC", "BT"}
 
 
-def _qr_data_uri(data: str) -> str:
-    """Generate QR code as base64 PNG data URI. Cached by input."""
-    cached = _QR_IMAGE_CACHE.get(data)
-    if cached:
-        return cached
+def _render_qr_unicode(payload: str) -> str:
+    """Render text payload as a QR code using Unicode half-blocks."""
     try:
         import qrcode
-        qr = qrcode.QRCode(box_size=5, border=2)
-        qr.add_data(data)
-        img = qr.make_image()
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        b64 = base64.b64encode(buf.getvalue()).decode()
-        uri = f"data:image/png;base64,{b64}"
-        _QR_IMAGE_CACHE[data] = uri
-        return uri
     except ImportError:
-        return ""
+        return "[qrcode lib not available]"
 
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=1,
+        border=2,
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
 
-def _format_device_list(devices: list[dict]) -> str:
-    if not devices:
-        return "(none)"
     lines = []
-    for d in devices:
-        area = d.get("area_id")
-        area_str = f" [area:{area}]" if area else ""
-        lines.append(f"  #{d['short_id']} {d['name']} ({d['type']}){area_str}")
+    for y in range(0, len(matrix), 2):
+        row = []
+        for x in range(len(matrix[y])):
+            upper = matrix[y][x]
+            lower = matrix[y + 1][x] if y + 1 < len(matrix) else False
+            if upper and lower:
+                row.append("█")
+            elif upper:
+                row.append("▀")
+            elif lower:
+                row.append("▄")
+            else:
+                row.append(" ")
+        lines.append("".join(row))
+    return "\n".join(lines)
+
+
+def _format_device_list(devices: list[dict], max_items: int = 30) -> str:
+    """Format list of devices for description display."""
+    if not devices:
+        return "—"
+    lines = []
+    for d in devices[:max_items]:
+        sid = d["short_id"]
+        name = d["name"]
+        type_code = d["type"]
+        entity = d["entity_id"]
+        enabled = "✓" if d.get("enabled", True) else "✗"
+        lines.append(f"  {enabled} #{sid} {name} [{type_code}] {entity}")
+    if len(devices) > max_items:
+        lines.append(f"  …и ещё {len(devices) - max_items}")
     return "\n".join(lines)
 
 
@@ -86,6 +94,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
+        self._test_short_id: int | None = None
 
     @property
     def _runtime(self):
@@ -105,11 +114,17 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_menu(
             step_id="init",
             menu_options=[
-                "general", "devices", "device_remove", "device_test",
-                "users", "pending", "config",
+                "general",
+                "devices",
+                "device_remove",
+                "test_device",
+                "users",
+                "pending",
+                "config",
             ],
         )
 
+    # ---------- init ----------
     async def async_step_init(self, user_input: dict | None = None) -> FlowResult:
         if self._registry is None:
             return self.async_abort(reason="not_loaded")
@@ -162,9 +177,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             _LOGGER.info("Options: added %d device(s)", added)
             return self._back_to_menu()
 
-        existing = registry.all_devices()
-        existing_text = _format_device_list(existing)
-
+        devices = registry.all_devices()
         return self.async_show_form(
             step_id="devices",
             data_schema=vol.Schema(
@@ -177,8 +190,8 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
             description_placeholders={
-                "count": str(len(existing)),
-                "device_list": existing_text,
+                "count": str(len(devices)),
+                "device_list": _format_device_list(devices),
             },
         )
 
@@ -204,11 +217,17 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             return self.async_show_form(
                 step_id="device_remove",
                 data_schema=vol.Schema({}),
-                description_placeholders={"count": "0"},
+                description_placeholders={
+                    "count": "0",
+                    "device_list": "—",
+                },
             )
 
         options = [
-            {"value": str(d["short_id"]), "label": f"{d['short_id']}: {d['name']} ({d['type']})"}
+            {
+                "value": str(d["short_id"]),
+                "label": f"#{d['short_id']} {d['name']} ({d['type']}) — {d['entity_id']}",
+            }
             for d in devices
         ]
         return self.async_show_form(
@@ -224,79 +243,154 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                     ),
                 }
             ),
-            description_placeholders={"count": str(len(devices))},
+            description_placeholders={
+                "count": str(len(devices)),
+                "device_list": _format_device_list(devices),
+            },
         )
 
-    # ---------- device_test ----------
-    async def async_step_device_test(self, user_input: dict | None = None) -> FlowResult:
+    # ---------- test_device ----------
+    async def async_step_test_device(self, user_input: dict | None = None) -> FlowResult:
+        """Step 1: pick device. Step 2 (async_step_test_action): pick action."""
         registry = self._registry
-        devices = registry.all_devices()
+        devices = [
+            d for d in registry.all_devices()
+            if d.get("enabled", True)
+            and d["type"] in (TESTABLE_BOOL_TYPES | TESTABLE_ACTIVATION_TYPES)
+        ]
 
         if user_input is not None:
-            sid = int(user_input["device_id"])
-            action = user_input["action"]
-            device = registry.get_device(sid)
-            if device is not None:
-                entity_id = device["entity_id"]
-                try:
-                    if action == "turn_on":
-                        await self.hass.services.async_call(
-                            "homeassistant", "turn_on", {"entity_id": entity_id}, blocking=True
-                        )
-                    elif action == "turn_off":
-                        await self.hass.services.async_call(
-                            "homeassistant", "turn_off", {"entity_id": entity_id}, blocking=True
-                        )
-                    elif action == "toggle":
-                        await self.hass.services.async_call(
-                            "homeassistant", "toggle", {"entity_id": entity_id}, blocking=True
-                        )
-                    elif action == "press":
-                        domain = entity_id.split(".", 1)[0]
-                        await self.hass.services.async_call(
-                            domain, "press", {"entity_id": entity_id}, blocking=True
-                        )
-                    _LOGGER.info("Test %s %s → OK", entity_id, action)
-                except Exception as e:
-                    _LOGGER.error("Test %s %s → FAILED: %s", entity_id, action, e)
-            return self._back_to_menu()
+            try:
+                self._test_short_id = int(user_input["device_id"])
+            except (TypeError, ValueError, KeyError):
+                self._test_short_id = None
+                return self._back_to_menu()
+            return await self.async_step_test_action()
 
         if not devices:
             return self.async_show_form(
-                step_id="device_test",
+                step_id="test_device",
                 data_schema=vol.Schema({}),
-                description_placeholders={"count": "0"},
+                description_placeholders={
+                    "device_list": "— no testable devices —"
+                },
             )
 
-        device_options = [
-            {"value": str(d["short_id"]), "label": f"#{d['short_id']} {d['name']} ({d['type']})"}
+        options = [
+            {
+                "value": str(d["short_id"]),
+                "label": f"#{d['short_id']} {d['name']} [{d['type']}] — {d['entity_id']}",
+            }
             for d in devices
         ]
         return self.async_show_form(
-            step_id="device_test",
+            step_id="test_device",
             data_schema=vol.Schema(
                 {
                     vol.Required("device_id"): SelectSelector(
                         SelectSelectorConfig(
-                            options=device_options,
-                            multiple=False,
-                            mode=SelectSelectorMode.LIST,
-                        )
-                    ),
-                    vol.Required("action", default="toggle"): SelectSelector(
-                        SelectSelectorConfig(
-                            options=[
-                                {"value": k, "label": v}
-                                for k, v in _DEVICE_ACTIONS.items()
-                            ],
+                            options=options,
                             multiple=False,
                             mode=SelectSelectorMode.LIST,
                         )
                     ),
                 }
             ),
-            description_placeholders={"count": str(len(devices))},
+            description_placeholders={
+                "device_list": _format_device_list(devices),
+            },
         )
+
+    async def async_step_test_action(self, user_input: dict | None = None) -> FlowResult:
+        """Pick action and execute via handlers.handle_cmd."""
+        registry = self._registry
+        runtime = self._runtime
+
+        if self._test_short_id is None:
+            return self._back_to_menu()
+
+        device = registry.get_device(self._test_short_id)
+        if device is None:
+            self._test_short_id = None
+            return self._back_to_menu()
+
+        device_type = device["type"]
+
+        if user_input is not None:
+            action = user_input.get("action")
+            cmd_fields = self._build_cmd_for_action(device_type, action)
+            if cmd_fields is None:
+                self._test_short_id = None
+                return self._back_to_menu()
+
+            cmd_payload = {"tp": 5, "id": self._test_short_id, **cmd_fields}
+            _LOGGER.info(
+                "TEST UI exec id=%d type=%s action=%s fields=%s",
+                self._test_short_id, device_type, action, cmd_fields,
+            )
+
+            if runtime is not None and runtime.handlers is not None:
+                fake_src_hex = "ff" * 16
+                fake_src_bytes = bytes.fromhex(fake_src_hex)
+                added = False
+                if not registry.is_approved(fake_src_hex):
+                    added = await registry.add_pending(fake_src_hex, "_test_ui")
+                    if added:
+                        await registry.approve_pending(fake_src_hex)
+                try:
+                    await runtime.handlers.handle_cmd(fake_src_bytes, cmd_payload)
+                finally:
+                    if added:
+                        await registry.revoke_user(fake_src_hex)
+
+            self._test_short_id = None
+            return self._back_to_menu()
+
+        action_options = self._action_options_for_type(device_type)
+        if not action_options:
+            self._test_short_id = None
+            return self._back_to_menu()
+
+        return self.async_show_form(
+            step_id="test_action",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): SelectSelector(
+                        SelectSelectorConfig(
+                            options=action_options,
+                            multiple=False,
+                            mode=SelectSelectorMode.LIST,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={
+                "device": f"#{device['short_id']} {device['name']} [{device_type}] — {device['entity_id']}",
+            },
+        )
+
+    @staticmethod
+    def _action_options_for_type(device_type: str) -> list[dict]:
+        if device_type in TESTABLE_BOOL_TYPES:
+            return [
+                {"value": "on", "label": "On"},
+                {"value": "off", "label": "Off"},
+            ]
+        if device_type in TESTABLE_ACTIVATION_TYPES:
+            return [{"value": "activate", "label": "Activate"}]
+        return []
+
+    @staticmethod
+    def _build_cmd_for_action(device_type: str, action: str) -> dict | None:
+        if device_type in TESTABLE_BOOL_TYPES:
+            if action == "on":
+                return {"s": True}
+            if action == "off":
+                return {"s": False}
+        if device_type in TESTABLE_ACTIVATION_TYPES:
+            if action == "activate":
+                return {}
+        return None
 
     # ---------- users ----------
     async def async_step_users(self, user_input: dict | None = None) -> FlowResult:
@@ -317,7 +411,9 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 step_id="users",
                 data_schema=vol.Schema({}),
                 description_placeholders={
-                    "active": "0", "max": str(MAX_ACTIVE_REMOTES)},
+                    "active": "0",
+                    "max": str(MAX_ACTIVE_REMOTES),
+                },
             )
 
         options = [
@@ -358,7 +454,9 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 if await registry.approve_pending(chosen):
                     _LOGGER.info("Options: approved %s...", chosen[:8])
             elif action == "reject" and chosen:
-                _LOGGER.info("Options: reject for %s... (no-op)", chosen[:8])
+                _LOGGER.info(
+                    "Options: reject for %s... (remove_pending not implemented)", chosen[:8]
+                )
             return self._back_to_menu()
 
         if not pending:
@@ -378,7 +476,8 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required("pending_hash"): SelectSelector(
                         SelectSelectorConfig(
-                            options=options, multiple=False, mode=SelectSelectorMode.LIST,
+                            options=options, multiple=False,
+                            mode=SelectSelectorMode.LIST,
                         )
                     ),
                     vol.Required("action", default="approve"): SelectSelector(
@@ -409,11 +508,8 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 "nm": meta.get("server_name", "Rover Hub"),
             }
         }
-        qr_text = json.dumps(qr_payload, ensure_ascii=False)
-
-        qr_image = _qr_data_uri(qr_text)
-        devices = registry.all_devices()
-        users = registry.all_users()
+        qr_json = json.dumps(qr_payload, ensure_ascii=False)
+        qr_image = _render_qr_unicode(qr_json)
 
         if user_input is not None:
             return self._back_to_menu()
@@ -425,9 +521,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 "identity": ihash,
                 "server_name": meta.get("server_name", "Rover Hub"),
                 "version": meta.get("version", "—"),
-                "qr_payload": qr_text,
-                "qr_image": qr_image or "",
-                "device_count": str(len(devices)),
-                "user_count": str(len(users)),
+                "qr_payload": qr_json,
+                "qr_image": qr_image,
             },
         )

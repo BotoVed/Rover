@@ -1,7 +1,9 @@
 """Tests for options_flow.py — logic of step handlers."""
+import json
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+import voluptuous as vol
 
 from custom_components.rover.options_flow import RoverOptionsFlow
 
@@ -64,7 +66,7 @@ async def test_init_shows_menu(flow):
     assert "users" in result["menu_options"]
     assert "pending" in result["menu_options"]
     assert "config" in result["menu_options"]
-    assert "device_test" in result["menu_options"]
+    assert "test_device" in result["menu_options"]
 
 
 @pytest.mark.asyncio
@@ -150,22 +152,84 @@ async def test_device_remove_ignores_invalid_id(flow, registry):
 @pytest.mark.asyncio
 async def test_device_test_empty_list(flow, registry):
     registry.all_devices.return_value = []
-    result = await flow.async_step_device_test()
+    result = await flow.async_step_test_device()
     assert result["type"] == "form"
-    assert result["description_placeholders"]["count"] == "0"
+    assert result["step_id"] == "test_device"
 
 
 @pytest.mark.asyncio
-async def test_device_test_submit_calls_service(flow, registry):
+async def test_test_device_filters_to_testable(flow, registry):
     registry.all_devices.return_value = [
-        {"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp"},
+        {"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp", "enabled": True},
+        {"short_id": 2, "name": "Temp", "type": "SE", "entity_id": "sensor.t", "enabled": True},
+        {"short_id": 3, "name": "Disabled", "type": "SW", "entity_id": "switch.d", "enabled": False},
     ]
-    registry.get_device = MagicMock(return_value={"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp"})
-    flow.hass.services.async_call = AsyncMock()
-    await flow.async_step_device_test({"device_id": "1", "action": "toggle"})
-    flow.hass.services.async_call.assert_awaited_once_with(
-        "homeassistant", "toggle", {"entity_id": "switch.lamp"}, blocking=True
-    )
+    result = await flow.async_step_test_device()
+    assert result["type"] == "form"
+    assert result["step_id"] == "test_device"
+    # Verify filtering via description (Lamp should be listed, disabled/SE not)
+    dl = result.get("description_placeholders", {}).get("device_list", "")
+    assert "#1 Lamp [SW] switch.lamp" in dl, f"expected SW device in list, got: {dl}"
+    assert "Temp" not in dl, "SE device should be filtered out"
+    assert "Disabled" not in dl, "disabled device should be filtered out"
+
+
+@pytest.mark.asyncio
+async def test_test_device_picks_then_action_on(flow, registry, runtime):
+    dev = {"short_id": 5, "name": "Pump", "type": "SW", "entity_id": "switch.pump", "enabled": True}
+    registry.all_devices.return_value = [dev]
+    registry.get_device.return_value = dev
+    registry.is_approved.return_value = False
+    registry.add_pending = AsyncMock(return_value=True)
+    registry.approve_pending = AsyncMock(return_value=True)
+    registry.revoke_user = AsyncMock(return_value=True)
+    runtime.handlers = MagicMock()
+    runtime.handlers.handle_cmd = AsyncMock()
+
+    result1 = await flow.async_step_test_device({"device_id": "5"})
+    assert flow._test_short_id == 5
+
+    result2 = await flow.async_step_test_action({"action": "on"})
+
+    runtime.handlers.handle_cmd.assert_awaited_once()
+    src_bytes, payload = runtime.handlers.handle_cmd.call_args[0]
+    assert payload == {"tp": 5, "id": 5, "s": True}
+    registry.add_pending.assert_awaited_once()
+    registry.approve_pending.assert_awaited_once()
+    registry.revoke_user.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_test_action_off(flow, registry, runtime):
+    dev = {"short_id": 5, "name": "Pump", "type": "SW", "entity_id": "switch.pump", "enabled": True}
+    registry.get_device.return_value = dev
+    registry.is_approved.return_value = True
+    runtime.handlers = MagicMock()
+    runtime.handlers.handle_cmd = AsyncMock()
+
+    flow._test_short_id = 5
+    await flow.async_step_test_action({"action": "off"})
+
+    runtime.handlers.handle_cmd.assert_awaited_once()
+    payload = runtime.handlers.handle_cmd.call_args[0][1]
+    assert payload == {"tp": 5, "id": 5, "s": False}
+    registry.add_pending.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_test_action_activate_scene(flow, registry, runtime):
+    dev = {"short_id": 7, "name": "Evening", "type": "SC", "entity_id": "scene.evening", "enabled": True}
+    registry.get_device.return_value = dev
+    registry.is_approved.return_value = True
+    runtime.handlers = MagicMock()
+    runtime.handlers.handle_cmd = AsyncMock()
+
+    flow._test_short_id = 7
+    await flow.async_step_test_action({"action": "activate"})
+
+    runtime.handlers.handle_cmd.assert_awaited_once()
+    payload = runtime.handlers.handle_cmd.call_args[0][1]
+    assert payload == {"tp": 5, "id": 7}
 
 
 @pytest.mark.asyncio
@@ -214,13 +278,45 @@ async def test_config_shows_identity_and_qr(flow, runtime):
     ph = result["description_placeholders"]
     assert ph["identity"] == runtime.identity_hash
     assert ph["server_name"] == "Rover Hub"
-    import json
     qr = json.loads(ph["qr_payload"])
     assert qr["rvr"]["dst"] == runtime.identity_hash
     assert qr["rvr"]["fmt"] == 1
+    assert "qr_image" in ph
 
 
 @pytest.mark.asyncio
 async def test_config_submit_returns_to_menu(flow):
     result = await flow.async_step_config({})
     assert result["type"] == "menu"
+
+
+# ---------- device list rendering ----------
+@pytest.mark.asyncio
+async def test_devices_form_lists_existing(flow, registry):
+    registry.all_devices.return_value = [
+        {"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp", "enabled": True},
+        {"short_id": 2, "name": "Sensor", "type": "SE", "entity_id": "sensor.t", "enabled": True},
+    ]
+    result = await flow.async_step_devices()
+    ph = result["description_placeholders"]
+    assert ph["count"] == "2"
+    assert "Lamp" in ph["device_list"]
+    assert "switch.lamp" in ph["device_list"]
+    assert "Sensor" in ph["device_list"]
+
+
+# ---------- QR rendering ----------
+def test_render_qr_unicode_smoke():
+    from custom_components.rover.options_flow import _render_qr_unicode
+    out = _render_qr_unicode('{"hello":"world"}')
+    assert "\n" in out
+    assert any(c in out for c in "█▀▄")
+
+
+@pytest.mark.asyncio
+async def test_config_includes_qr_image(flow, runtime):
+    result = await flow.async_step_config()
+    ph = result["description_placeholders"]
+    assert "qr_image" in ph
+    assert "\n" in ph["qr_image"]
+    assert any(c in ph["qr_image"] for c in "█▀▄ ")
