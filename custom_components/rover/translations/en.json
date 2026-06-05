@@ -16,33 +16,51 @@
         "title": "Rover settings",
         "menu_options": {
           "general": "General",
-          "devices": "Devices",
-          "users": "Users",
+          "devices": "Add devices",
+          "device_remove": "Remove devices",
+          "users": "Active remotes",
           "pending": "Pending requests",
-          "config": "Configuration & QR"
+          "config": "Server info & QR"
         }
       },
       "general": {
-        "title": "General settings",
+        "title": "General",
         "data": {
           "server_name": "Server display name"
         }
       },
       "devices": {
-        "title": "Devices",
-        "description": "Select which Home Assistant entities Rover should expose to remotes."
+        "title": "Add devices",
+        "description": "Currently registered: {count}. Pick HA entities to expose. Already-registered entities will be skipped.",
+        "data": {
+          "entities": "Entities"
+        }
+      },
+      "device_remove": {
+        "title": "Remove devices",
+        "description": "Registered devices: {count}. Pick devices to remove.",
+        "data": {
+          "device_ids": "Devices"
+        }
       },
       "users": {
         "title": "Active remotes",
-        "description": "Approved remotes ({active}/{max}). Remove a remote to free a slot."
+        "description": "Approved remotes: {active}/{max}. Pick remotes to revoke.",
+        "data": {
+          "user_hashes": "Remotes"
+        }
       },
       "pending": {
         "title": "Pending registration requests",
-        "description": "{count} request(s) waiting for approval. New requests go here when at least one owner exists."
+        "description": "Pending requests: {count}.",
+        "data": {
+          "pending_hash": "Request",
+          "action": "Action"
+        }
       },
       "config": {
-        "title": "Configuration & QR",
-        "description": "Scan this QR code from Rover-App to add this server. Export identity for backup or migration."
+        "title": "Server info",
+        "description": "Server name: {server_name}\nVersion: {version}\n\nIdentity hash (paste into Rover-App):\n{identity}\n\nQR payload (JSON):\n{qr_payload}"
       }
     }
   },

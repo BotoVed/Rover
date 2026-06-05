@@ -16,33 +16,51 @@
         "title": "Настройки Rover",
         "menu_options": {
           "general": "Общие",
-          "devices": "Устройства",
-          "users": "Пользователи",
+          "devices": "Добавить устройства",
+          "device_remove": "Удалить устройства",
+          "users": "Активные пульты",
           "pending": "Запросы на регистрацию",
-          "config": "Конфигурация и QR"
+          "config": "Сервер и QR"
         }
       },
       "general": {
-        "title": "Общие настройки",
+        "title": "Общие",
         "data": {
           "server_name": "Отображаемое имя сервера"
         }
       },
       "devices": {
-        "title": "Устройства",
-        "description": "Выберите какие entity Home Assistant нужно открыть для пультов."
+        "title": "Добавить устройства",
+        "description": "Зарегистрировано: {count}. Выберите entity HA для проброса. Уже зарегистрированные будут пропущены.",
+        "data": {
+          "entities": "Сущности"
+        }
+      },
+      "device_remove": {
+        "title": "Удалить устройства",
+        "description": "Зарегистрировано: {count}. Выберите устройства для удаления.",
+        "data": {
+          "device_ids": "Устройства"
+        }
       },
       "users": {
         "title": "Активные пульты",
-        "description": "Одобренные пульты ({active}/{max}). Удалите пульт, чтобы освободить место."
+        "description": "Одобренные пульты: {active}/{max}. Выберите для отзыва доступа.",
+        "data": {
+          "user_hashes": "Пульты"
+        }
       },
       "pending": {
         "title": "Запросы на регистрацию",
-        "description": "{count} запрос(ов) ждёт одобрения. Запросы попадают сюда когда уже есть owner."
+        "description": "В очереди: {count}.",
+        "data": {
+          "pending_hash": "Запрос",
+          "action": "Действие"
+        }
       },
       "config": {
-        "title": "Конфигурация и QR",
-        "description": "Отсканируйте QR-код в Rover-App чтобы добавить этот сервер. Экспортируйте identity для резервной копии или переноса."
+        "title": "Сервер",
+        "description": "Имя сервера: {server_name}\nВерсия: {version}\n\nIdentity hash (вставить в Rover-App):\n{identity}\n\nQR payload (JSON):\n{qr_payload}"
       }
     }
   },
