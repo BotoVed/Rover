@@ -18,6 +18,7 @@
           "general": "General",
           "devices": "Add devices",
           "device_remove": "Remove devices",
+          "device_test": "Test device",
           "users": "Active remotes",
           "pending": "Pending requests",
           "config": "Server info & QR"
@@ -31,7 +32,7 @@
       },
       "devices": {
         "title": "Add devices",
-        "description": "Currently registered: {count}. Pick HA entities to expose. Already-registered entities will be skipped.",
+        "description": "Registered devices ({count}):\n{device_list}\n\nPick new HA entities to expose. Already-registered ones are skipped.",
         "data": {
           "entities": "Entities"
         }
@@ -41,6 +42,14 @@
         "description": "Registered devices: {count}. Pick devices to remove.",
         "data": {
           "device_ids": "Devices"
+        }
+      },
+      "device_test": {
+        "title": "Test device",
+        "description": "Devices: {count}. Pick a device and action to test it live.",
+        "data": {
+          "device_id": "Device",
+          "action": "Action"
         }
       },
       "users": {
@@ -60,7 +69,7 @@
       },
       "config": {
         "title": "Server info",
-        "description": "Server name: {server_name}\nVersion: {version}\n\nIdentity hash (paste into Rover-App):\n{identity}\n\nQR payload (JSON):\n{qr_payload}"
+        "description": "![QR]({qr_image})\n\n**Server:** {server_name}  \n**Version:** {version}  \n**Devices:** {device_count}  \n**Users:** {user_count}  \n\n**Identity hash (paste into Rover-App):**\n```\n{identity}\n```\n\n**QR payload (JSON):**\n```json\n{qr_payload}\n```"
       }
     }
   },

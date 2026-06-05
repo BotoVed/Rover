@@ -18,6 +18,7 @@
           "general": "Общие",
           "devices": "Добавить устройства",
           "device_remove": "Удалить устройства",
+          "device_test": "Проверить устройство",
           "users": "Активные пульты",
           "pending": "Запросы на регистрацию",
           "config": "Сервер и QR"
@@ -31,7 +32,7 @@
       },
       "devices": {
         "title": "Добавить устройства",
-        "description": "Зарегистрировано: {count}. Выберите entity HA для проброса. Уже зарегистрированные будут пропущены.",
+        "description": "Зарегистрировано устройств: {count}.\n{device_list}\n\nВыберите новые entity HA для проброса. Уже зарегистрированные будут пропущены.",
         "data": {
           "entities": "Сущности"
         }
@@ -41,6 +42,14 @@
         "description": "Зарегистрировано: {count}. Выберите устройства для удаления.",
         "data": {
           "device_ids": "Устройства"
+        }
+      },
+      "device_test": {
+        "title": "Проверить устройство",
+        "description": "Устройств: {count}. Выберите устройство и действие для проверки.",
+        "data": {
+          "device_id": "Устройство",
+          "action": "Действие"
         }
       },
       "users": {
@@ -60,7 +69,7 @@
       },
       "config": {
         "title": "Сервер",
-        "description": "Имя сервера: {server_name}\nВерсия: {version}\n\nIdentity hash (вставить в Rover-App):\n{identity}\n\nQR payload (JSON):\n{qr_payload}"
+        "description": "![QR]({qr_image})\n\n**Сервер:** {server_name}  \n**Версия:** {version}  \n**Устройств:** {device_count}  \n**Пультов:** {user_count}  \n\n**Identity hash (вставить в Rover-App):**\n```\n{identity}\n```\n\n**QR payload (JSON):**\n```json\n{qr_payload}\n```"
       }
     }
   },

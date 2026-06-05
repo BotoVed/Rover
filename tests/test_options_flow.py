@@ -64,6 +64,7 @@ async def test_init_shows_menu(flow):
     assert "users" in result["menu_options"]
     assert "pending" in result["menu_options"]
     assert "config" in result["menu_options"]
+    assert "device_test" in result["menu_options"]
 
 
 @pytest.mark.asyncio
@@ -144,6 +145,27 @@ async def test_device_remove_ignores_invalid_id(flow, registry):
     registry.all_devices.return_value = [{"short_id": 1, "name": "A", "type": "SW"}]
     await flow.async_step_device_remove({"device_ids": ["not_int"]})
     registry.remove_device.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_device_test_empty_list(flow, registry):
+    registry.all_devices.return_value = []
+    result = await flow.async_step_device_test()
+    assert result["type"] == "form"
+    assert result["description_placeholders"]["count"] == "0"
+
+
+@pytest.mark.asyncio
+async def test_device_test_submit_calls_service(flow, registry):
+    registry.all_devices.return_value = [
+        {"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp"},
+    ]
+    registry.get_device = MagicMock(return_value={"short_id": 1, "name": "Lamp", "type": "SW", "entity_id": "switch.lamp"})
+    flow.hass.services.async_call = AsyncMock()
+    await flow.async_step_device_test({"device_id": "1", "action": "toggle"})
+    flow.hass.services.async_call.assert_awaited_once_with(
+        "homeassistant", "toggle", {"entity_id": "switch.lamp"}, blocking=True
+    )
 
 
 @pytest.mark.asyncio
