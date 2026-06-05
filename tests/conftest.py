@@ -24,7 +24,21 @@ sys.modules["LXMF"] = LXMFMock
 # On CI homeassistant is installed and the real module is used.
 cv_mock = MagicMock()
 cv_mock.config_entry_only_config_schema = MagicMock(return_value={})
+cv_mock.positive_int = MagicMock(return_value=None)
 sys.modules["homeassistant.helpers.config_validation"] = cv_mock
+
+# Mock voluptuous (not installed in local test env, only on HAOS)
+vol_mock = MagicMock()
+vol_mock.Schema = MagicMock(return_value=None)
+vol_mock.In = MagicMock(return_value=MagicMock())
+vol_mock.All = MagicMock(return_value=MagicMock())
+vol_mock.Range = MagicMock(return_value=MagicMock())
+vol_mock.Optional = MagicMock(return_value="optional-key")
+vol_mock.Required = MagicMock(return_value="required-key")
+vol_mock.Any = MagicMock(return_value=MagicMock())
+sys.modules["voluptuous"] = vol_mock
+sys.modules["voluptuous.schema_builder"] = vol_mock
+sys.modules["voluptuous.validators"] = vol_mock
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
