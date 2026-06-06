@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import urllib.parse
 from typing import Any
 
 import voluptuous as vol
@@ -37,39 +38,10 @@ TESTABLE_BOOL_TYPES = {"SW", "LT", "LK", "FN"}
 TESTABLE_ACTIVATION_TYPES = {"SC", "BT"}
 
 
-def _render_qr_unicode(payload: str) -> str:
-    """Render text payload as a QR code using Unicode half-blocks."""
-    try:
-        import qrcode
-    except ImportError:
-        return "[qrcode lib not available]"
-
-    qr = qrcode.QRCode(
-        version=None,
-        error_correction=qrcode.constants.ERROR_CORRECT_L,
-        box_size=1,
-        border=2,
-    )
-    qr.add_data(payload)
-    qr.make(fit=True)
-    matrix = qr.get_matrix()
-
-    lines = []
-    for y in range(0, len(matrix), 2):
-        row = []
-        for x in range(len(matrix[y])):
-            upper = matrix[y][x]
-            lower = matrix[y + 1][x] if y + 1 < len(matrix) else False
-            if upper and lower:
-                row.append("█")
-            elif upper:
-                row.append("▀")
-            elif lower:
-                row.append("▄")
-            else:
-                row.append(" ")
-        lines.append("".join(row))
-    return "\n".join(lines)
+def _build_qr_image_url(payload: str, size: int = 300) -> str:
+    """Build a QR code image URL using the qrserver.com API."""
+    encoded = urllib.parse.quote(payload)
+    return f"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={encoded}"
 
 
 def _format_device_list(devices: list[dict], max_items: int = 30) -> str:
@@ -509,7 +481,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             }
         }
         qr_json = json.dumps(qr_payload, ensure_ascii=False)
-        qr_image = _render_qr_unicode(qr_json)
+        qr_url = _build_qr_image_url(qr_json)
 
         if user_input is not None:
             return self._back_to_menu()
@@ -522,6 +494,6 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 "server_name": meta.get("server_name", "Rover Hub"),
                 "version": meta.get("version", "—"),
                 "qr_payload": qr_json,
-                "qr_image": qr_image,
+                "qr_url": qr_url,
             },
         )

@@ -75,7 +75,7 @@
       },
       "config": {
         "title": "Server info",
-        "description": "Server name: {server_name}\nVersion: {version}\n\nIdentity hash:\n`{identity}`\n\nScan this QR with Rover-App:\n\n```\n{qr_image}\n```\n\nOr copy the JSON payload:\n\n`{qr_payload}`"
+        "description": "Server name: {server_name}\nVersion: {version}\n\nIdentity hash:\n`{identity}`\n\nScan this QR with Rover-App:\n\n![QR]({qr_url})\n\nOr copy the JSON payload:\n\n`{qr_payload}`"
       }
     }
   },

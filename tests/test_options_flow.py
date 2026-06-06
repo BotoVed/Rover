@@ -282,7 +282,7 @@ async def test_config_shows_identity_and_qr(flow, runtime):
     qr = json.loads(ph["qr_payload"])
     assert qr["rvr"]["dst"] == runtime.identity_hash
     assert qr["rvr"]["fmt"] == 1
-    assert "qr_image" in ph
+    assert "qr_url" in ph
 
 
 @pytest.mark.asyncio
@@ -306,18 +306,19 @@ async def test_devices_form_lists_existing(flow, registry):
     assert "Sensor" in ph["device_list"]
 
 
-# ---------- QR rendering ----------
-def test_render_qr_unicode_smoke():
-    from custom_components.rover.options_flow import _render_qr_unicode
-    out = _render_qr_unicode('{"hello":"world"}')
-    assert "\n" in out
-    assert any(c in out for c in "█▀▄")
+# ---------- QR URL (external API) ----------
+def test_build_qr_image_url():
+    from custom_components.rover.options_flow import _build_qr_image_url
+    url = _build_qr_image_url('{"hello":"world"}')
+    assert url.startswith("https://api.qrserver.com/v1/create-qr-code/")
+    assert "size=300x300" in url
+    assert "data=" in url
 
 
 @pytest.mark.asyncio
-async def test_config_includes_qr_image(flow, runtime):
+async def test_config_includes_qr_url(flow, runtime):
     result = await flow.async_step_config()
     ph = result["description_placeholders"]
-    assert "qr_image" in ph
-    assert "\n" in ph["qr_image"]
-    assert any(c in ph["qr_image"] for c in "█▀▄ ")
+    assert "qr_url" in ph
+    assert ph["qr_url"].startswith("https://api.qrserver.com/v1/create-qr-code/")
+    assert "data=" in ph["qr_url"]
