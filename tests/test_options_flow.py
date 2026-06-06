@@ -48,6 +48,7 @@ def entry(runtime):
 @pytest.fixture
 def flow(entry):
     f = RoverOptionsFlow(entry)
+    f.handler = "test_entry_id"
     f.hass = MagicMock()
     f.hass.states.get = MagicMock(return_value=_state("Lamp"))
     f.async_show_menu = MagicMock(side_effect=lambda **kwargs: {"type": "menu", **kwargs})
@@ -71,7 +72,7 @@ async def test_init_shows_menu(flow):
 
 @pytest.mark.asyncio
 async def test_init_no_registry_aborts(flow):
-    flow.config_entry.runtime_data.registry = None
+    flow._config_entry.runtime_data.registry = None
     result = await flow.async_step_init()
     assert result["type"] == "abort"
 
