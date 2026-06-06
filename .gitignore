@@ -18,3 +18,5 @@ __pycache__/
 # Release artifacts
 rover.zip
 
+.venv/
+*.egg-info/
