@@ -31,7 +31,8 @@ class RoverTransport:
         self._identity: RNS.Identity | None = None
         self._router: LXMF.LXMRouter | None = None
         self._delivery_dest = None
-        self._tcp_interface = None  # TCPServerInterface, lazy import
+        self._rns = None
+        self._tcp_interface = None
         self._shutdown = False
 
     async def async_start(self) -> str:
@@ -51,15 +52,24 @@ class RoverTransport:
             )
             self._identity = identity
 
-            # Both RNS.Reticulum and LXMF.LXMRouter call signal.signal()
-            # in their __init__, which raises from a worker thread.
             _orig_signal = signal_module.signal
             signal_module.signal = lambda signum, handler: None
             try:
+                config_path = os.path.join(self._config_dir, "config")
+                config_content = """
+[reticulum]
+enable_transport = True
+share_instance = No
+"""
+                with open(config_path, "w") as f:
+                    f.write(config_content.strip())
+                self._logger.info("Wrote RNS config to %s", config_path)
+
                 try:
-                    RNS.Reticulum(configdir=self._config_dir)
+                    self._rns = RNS.Reticulum(configdir=self._config_dir)
                     self._logger.info("RNS init configdir=%s", self._config_dir)
                 except OSError:
+                    self._rns = getattr(RNS.Reticulum, '_default_instance', None)
                     self._logger.warning("RNS already running, reusing")
 
                 router = LXMF.LXMRouter(
@@ -81,15 +91,24 @@ class RoverTransport:
 
             router.register_delivery_callback(self._on_lxmf_message)
 
-            # TCP Server Interface для прямых mesh-подключений
+            self._logger.info("Starting TCP interface on 0.0.0.0:%s", self._tcp_port)
             try:
                 from RNS.Interfaces.TCPInterface import TCPServerInterface
+                tcp_config = {
+                    "name": "Rover TCP",
+                    "listen_ip": "0.0.0.0",
+                    "listen_port": self._tcp_port,
+                }
                 self._tcp_interface = TCPServerInterface(
-                    RNS.Transport,
-                    name="Rover TCP",
-                    port=self._tcp_port,
-                    bindip="0.0.0.0",
+                    self._rns,
+                    tcp_config,
                 )
+                self._tcp_interface.ifac_size = 16
+                self._tcp_interface.ifac_netname = None
+                self._tcp_interface.ifac_netkey = None
+                self._tcp_interface.announce_rate_target = None
+                self._tcp_interface.announce_rate_grace = None
+                self._tcp_interface.announce_rate_penalty = None
                 RNS.Transport.interfaces.append(self._tcp_interface)
                 self._logger.info(
                     "TCP interface started on port %s", self._tcp_port

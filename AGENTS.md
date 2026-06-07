@@ -1,3 +1,60 @@
+# Проверка логов Rover на HAOS
+
+Хост: `192.168.1.114`, порт: `222`, пользователь: `root`, пароль: `775Ho` (в `.env`: `HAOS_PASS`).
+
+## Кратко (одна строка)
+
+```bash
+sshpass -p '775Ho' ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 222 root@192.168.1.114 "ha core logs 2>&1 | grep -i 'rover\|trn\|TCP interface\|Rover 0\.' | tail -20"
+```
+
+## Расшифровка
+
+| Часть | Что делает |
+|-------|-----------|
+| `sshpass -p '775Ho' ...` | Подключается к HAOS без интерактивного ввода пароля |
+| `ssh -p 222 root@192.168.1.114` | SSH на порт 222 |
+| `ha core logs` | Выгружает логи HA core (внутри контейнера) |
+| `grep -i 'rover\|trn\|TCP interface\|Rover 0\.'` | Фильтр: только строчки про Rover |
+| `tail -20` | Последние 20 строк |
+
+## Как читать
+
+- **INFO** (зелёный) — `Rover 0.5.0 setup complete` — интеграция загрузилась
+- **INFO** (зелёный) — `TCP interface started on port 4242` — TCP порт слушается
+- **WARNING** (жёлтый) — `TCP interface failed on port 4242: ...` — ошибка создания TCP
+- **INFO** (зелёный) — `RNS init identity=77a0c6...` — Reticulum стартанул
+- **ERROR** (красный) — `Traceback ... AttributeError` — ошибка при входящем подключении
+
+## Пример
+
+```bash
+# Все логи по rover
+sshpass -p '775Ho' ssh -p 222 root@192.168.1.114 "ha core logs | grep -i rover | tail -20"
+
+# Только ошибки
+sshpass -p '775Ho' ssh -p 222 root@192.168.1.114 "ha core logs | grep -i 'error\|traceback\|failed' | grep -i rover | tail -20"
+
+# Только TCP interface
+sshpass -p '775Ho' ssh -p 222 root@192.168.1.114 "ha core logs | grep -i 'tcp interface\|port 4242' | tail -10"
+```
+
+## Полезное
+
+```bash
+# Проверить версию
+sshpass -p '775Ho' ssh -p 222 root@192.168.1.114 "grep version /config/custom_components/rover/manifest.json"
+
+# SCP файла
+sshpass -p '775Ho' scp -P 222 local_file root@192.168.1.114:/config/custom_components/rover/
+
+# Рестарт HA
+sshpass -p '775Ho' ssh -p 222 root@192.168.1.114 "ha core restart"
+
+# Проверить что порт слушается (из контейнера не видно, проверять внешне)
+nc -w 2 192.168.1.114 4242 && echo "OPEN" || echo "CLOSED"
+```
+
 # Release procedure
 
 ## Prerequisites
