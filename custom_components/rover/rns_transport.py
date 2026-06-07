@@ -12,7 +12,7 @@ import LXMF
 from homeassistant.core import HomeAssistant
 
 from .codec import decode
-from .const import LOGGER_TRN
+from .const import DEFAULT_TCP_PORT, LOGGER_TRN
 
 
 class RoverTransport:
@@ -21,14 +21,17 @@ class RoverTransport:
         hass: HomeAssistant,
         config_dir: str,
         on_message: Callable,
+        tcp_port: int = DEFAULT_TCP_PORT,
     ) -> None:
         self._hass = hass
         self._config_dir = config_dir
         self._on_message = on_message
+        self._tcp_port = tcp_port
         self._logger = logging.getLogger(LOGGER_TRN)
         self._identity: RNS.Identity | None = None
         self._router: LXMF.LXMRouter | None = None
         self._delivery_dest = None
+        self._tcp_interface = None  # TCPServerInterface, lazy import
         self._shutdown = False
 
     async def async_start(self) -> str:
@@ -78,8 +81,30 @@ class RoverTransport:
 
             router.register_delivery_callback(self._on_lxmf_message)
 
+            # TCP Server Interface для прямых mesh-подключений
+            try:
+                from RNS.Interfaces.TCPInterface import TCPServerInterface
+                self._tcp_interface = TCPServerInterface(
+                    RNS.Transport,
+                    name="Rover TCP",
+                    port=self._tcp_port,
+                    bindip="0.0.0.0",
+                )
+                RNS.Transport.interfaces.append(self._tcp_interface)
+                self._logger.info(
+                    "TCP interface started on port %s", self._tcp_port
+                )
+            except Exception as exc:
+                self._logger.warning(
+                    "TCP interface failed on port %s: %s", self._tcp_port, exc
+                )
+
         await self._hass.async_add_executor_job(_init)
         return self._identity.hash.hex()
+
+    @property
+    def identity(self) -> RNS.Identity | None:
+        return self._identity
 
     def _on_lxmf_message(self, message: LXMF.LXMessage) -> None:
         trace = message.hash.hex()[:8] if message.hash else "--------"
@@ -182,6 +207,14 @@ class RoverTransport:
         self._shutdown = True
 
         def _do_shutdown():
+            if self._tcp_interface is not None:
+                try:
+                    if self._tcp_interface in RNS.Transport.interfaces:
+                        RNS.Transport.interfaces.remove(self._tcp_interface)
+                    self._tcp_interface = None
+                    self._logger.info("TCP interface removed")
+                except Exception:
+                    pass
             if self._router:
                 try:
                     self._router.stop()

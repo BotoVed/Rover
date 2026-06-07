@@ -16,6 +16,7 @@
         "title": "Rover settings",
         "menu_options": {
           "general": "General",
+          "network": "Network",
           "devices": "Add devices",
           "device_remove": "Remove devices",
           "test_device": "Test device",
@@ -28,6 +29,14 @@
         "title": "General",
         "data": {
           "server_name": "Server display name"
+        }
+      },
+      "network": {
+        "title": "Network",
+        "data": {
+          "tcp_port": "TCP port (Reticulum)",
+          "local_ip": "Local IP address",
+          "ssid": "WiFi SSID (optional)"
         }
       },
       "devices": {

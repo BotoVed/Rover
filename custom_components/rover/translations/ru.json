@@ -16,6 +16,7 @@
         "title": "Настройки Rover",
         "menu_options": {
           "general": "Общие",
+          "network": "Сеть",
           "devices": "Добавить устройства",
           "device_remove": "Удалить устройства",
           "test_device": "Тест устройства",
@@ -28,6 +29,14 @@
         "title": "Общие",
         "data": {
           "server_name": "Отображаемое имя сервера"
+        }
+      },
+      "network": {
+        "title": "Сеть",
+        "data": {
+          "tcp_port": "TCP порт (Reticulum)",
+          "local_ip": "Локальный IP адрес",
+          "ssid": "Имя WiFi сети (необязательно)"
         }
       },
       "devices": {

@@ -1,8 +1,10 @@
 """Options flow for Rover integration."""
 from __future__ import annotations
 
+import base64
 import json
 import logging
+import socket
 import urllib.parse
 from typing import Any
 
@@ -20,6 +22,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    DEFAULT_TCP_PORT,
     DOMAIN,
     DOMAIN_TO_TYPE,
     LOGGER_ROOT,
@@ -42,6 +45,19 @@ def _build_qr_image_url(payload: str, size: int = 300) -> str:
     """Build a QR code image URL using the qrserver.com API."""
     encoded = urllib.parse.quote(payload)
     return f"https://api.qrserver.com/v1/create-qr-code/?size={size}x{size}&data={encoded}"
+
+
+def _get_local_ip() -> str:
+    """Try to auto-detect the local LAN IP address."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.settimeout(0.1)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return ""
 
 
 def _format_device_list(devices: list[dict], max_items: int = 30) -> str:
@@ -87,6 +103,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             menu_options=[
                 "general",
+                "network",
                 "devices",
                 "device_remove",
                 "test_device",
@@ -118,6 +135,49 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Required(
                         "server_name", default=meta.get("server_name", "Rover Hub")
+                    ): str,
+                }
+            ),
+        )
+
+    # ---------- network (TCP, SSID, IP) ----------
+    async def async_step_network(self, user_input: dict | None = None) -> FlowResult:
+        registry = self._registry
+        meta = registry.get_meta()
+
+        if user_input is not None:
+            new_port = int(user_input.get("tcp_port", DEFAULT_TCP_PORT))
+            new_ip = str(user_input.get("local_ip", "")).strip()
+            new_ssid = str(user_input.get("ssid", "")).strip()
+            if new_port != meta.get("tcp_port", DEFAULT_TCP_PORT):
+                await registry.set_tcp_port(new_port)
+            if new_ip != meta.get("local_ip", ""):
+                await registry.set_local_ip(new_ip)
+            if new_ssid != meta.get("ssid", ""):
+                await registry.set_ssid(new_ssid)
+            return self._back_to_menu()
+
+        current_ip = meta.get("local_ip", "")
+        if not current_ip:
+            detected = _get_local_ip()
+            if detected:
+                current_ip = detected
+
+        return self.async_show_form(
+            step_id="network",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "tcp_port",
+                        default=meta.get("tcp_port", DEFAULT_TCP_PORT),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1024, max=65535)),
+                    vol.Optional(
+                        "local_ip",
+                        default=current_ip,
+                    ): str,
+                    vol.Optional(
+                        "ssid",
+                        default=meta.get("ssid", ""),
                     ): str,
                 }
             ),
@@ -473,18 +533,42 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         meta = registry.get_meta()
         ihash = self._identity_hash or "(not initialized)"
 
-        qr_payload = {
+        if user_input is not None:
+            return self._back_to_menu()
+
+        # Build v2 QR payload
+        runtime = self._runtime
+        pubkey_b64 = ""
+        if runtime is not None and runtime.transport is not None:
+            identity = runtime.transport.identity
+            if identity is not None:
+                try:
+                    pubkey_b64 = base64.b64encode(
+                        identity.get_public_key()
+                    ).decode()
+                except Exception:
+                    pubkey_b64 = ""
+
+        local_ip = meta.get("local_ip", "") or _get_local_ip()
+        tcp_port = meta.get("tcp_port", DEFAULT_TCP_PORT)
+        tcp_addr = f"{local_ip}:{tcp_port}" if local_ip else f"0.0.0.0:{tcp_port}"
+        ssid = meta.get("ssid", "")
+
+        qr_payload: dict[str, Any] = {
             "rvr": {
                 "fmt": QR_FORMAT_VERSION,
                 "dst": ihash,
                 "nm": meta.get("server_name", "Rover Hub"),
             }
         }
+        if pubkey_b64:
+            qr_payload["rvr"]["pk"] = pubkey_b64
+        qr_payload["rvr"]["tcp"] = tcp_addr
+        if ssid:
+            qr_payload["rvr"]["ssid"] = ssid
+
         qr_json = json.dumps(qr_payload, ensure_ascii=False)
         qr_url = _build_qr_image_url(qr_json)
-
-        if user_input is not None:
-            return self._back_to_menu()
 
         return self.async_show_form(
             step_id="config",

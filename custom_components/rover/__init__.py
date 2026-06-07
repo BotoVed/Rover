@@ -1,7 +1,7 @@
 """Rover — Remote Over Radio for Home Assistant."""
 from __future__ import annotations
 
-__version__ = "0.4.2"
+__version__ = "0.5.0"
 
 import logging
 import os
@@ -61,10 +61,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await runtime.dispatcher.dispatch(source_hash, fields)
 
     # 4. Transport (RNS + LXMF)
+    tcp_port = runtime.registry.get_meta().get("tcp_port", 4242)
     runtime.transport = RoverTransport(
         hass=hass,
         config_dir=config_dir,
         on_message=_route_inbound,
+        tcp_port=tcp_port,
     )
     try:
         identity_hash = await runtime.transport.async_start()

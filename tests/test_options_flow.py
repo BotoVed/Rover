@@ -281,7 +281,10 @@ async def test_config_shows_identity_and_qr(flow, runtime):
     assert ph["server_name"] == "Rover Hub"
     qr = json.loads(ph["qr_payload"])
     assert qr["rvr"]["dst"] == runtime.identity_hash
-    assert qr["rvr"]["fmt"] == 1
+    assert qr["rvr"]["fmt"] == 2
+    assert qr["rvr"]["tcp"].endswith(":4242")
+    assert "pk" not in qr["rvr"]
+    assert "ssid" not in qr["rvr"]
     assert "qr_url" in ph
 
 
@@ -289,6 +292,37 @@ async def test_config_shows_identity_and_qr(flow, runtime):
 async def test_config_submit_returns_to_menu(flow):
     result = await flow.async_step_config({})
     assert result["type"] == "menu"
+
+
+# ---------- network step ----------
+@pytest.mark.asyncio
+async def test_network_form_shown(flow, registry):
+    meta = {"server_name": "Rover Hub", "version": "0.4.2",
+            "tcp_port": 4242, "local_ip": "", "ssid": ""}
+    registry.get_meta = lambda: dict(meta)
+
+    result = await flow.async_step_network()
+    assert result["type"] == "form"
+    assert result["step_id"] == "network"
+
+
+@pytest.mark.asyncio
+async def test_network_submit_saves(flow, registry):
+    meta = {"server_name": "Rover Hub", "version": "0.4.2",
+            "tcp_port": 4242, "local_ip": "192.168.1.100", "ssid": ""}
+    registry.get_meta = lambda: dict(meta)
+    registry.set_tcp_port = AsyncMock()
+    registry.set_local_ip = AsyncMock()
+    registry.set_ssid = AsyncMock()
+
+    await flow.async_step_network({
+        "tcp_port": 4245,
+        "local_ip": "192.168.1.50",
+        "ssid": "MyWiFi",
+    })
+    registry.set_tcp_port.assert_awaited_once_with(4245)
+    registry.set_local_ip.assert_awaited_once_with("192.168.1.50")
+    registry.set_ssid.assert_awaited_once_with("MyWiFi")
 
 
 # ---------- device list rendering ----------

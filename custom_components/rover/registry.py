@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    DEFAULT_TCP_PORT,
     LOGGER_REG,
     MAX_PENDING_REMOTES,
     ROLE_OWNER,
@@ -42,7 +43,13 @@ class RoverRegistry:
         loaded = await self._store.async_load()
         if loaded is None:
             self._data = {
-                "meta": {"server_name": "Rover Hub", "version": "0.3.0"},
+                "meta": {
+                    "server_name": "Rover Hub",
+                    "version": "0.3.0",
+                    "tcp_port": DEFAULT_TCP_PORT,
+                    "local_ip": "",
+                    "ssid": "",
+                },
                 "users": [],
                 "areas": [],
                 "devices": [],
@@ -317,6 +324,39 @@ class RoverRegistry:
         new_hash = self._data["_hash_m"]
         self._logger.info(
             "MUTATION set_server_name: m %s->%s", old_hash, new_hash
+        )
+        self._on_changed("m")
+        await self.async_save()
+
+    async def set_tcp_port(self, port: int) -> None:
+        old_hash = self._data["_hash_m"]
+        self._data["meta"]["tcp_port"] = port
+        self._recalc_hashes()
+        new_hash = self._data["_hash_m"]
+        self._logger.info(
+            "MUTATION set_tcp_port %s: m %s->%s", port, old_hash, new_hash
+        )
+        self._on_changed("m")
+        await self.async_save()
+
+    async def set_local_ip(self, ip: str) -> None:
+        old_hash = self._data["_hash_m"]
+        self._data["meta"]["local_ip"] = ip
+        self._recalc_hashes()
+        new_hash = self._data["_hash_m"]
+        self._logger.info(
+            "MUTATION set_local_ip %s: m %s->%s", ip, old_hash, new_hash
+        )
+        self._on_changed("m")
+        await self.async_save()
+
+    async def set_ssid(self, ssid: str) -> None:
+        old_hash = self._data["_hash_m"]
+        self._data["meta"]["ssid"] = ssid
+        self._recalc_hashes()
+        new_hash = self._data["_hash_m"]
+        self._logger.info(
+            "MUTATION set_ssid: m %s->%s", old_hash, new_hash
         )
         self._on_changed("m")
         await self.async_save()
