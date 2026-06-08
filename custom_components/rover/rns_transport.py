@@ -32,7 +32,6 @@ class RoverTransport:
         self._router: LXMF.LXMRouter | None = None
         self._delivery_dest = None
         self._rns = None
-        self._tcp_interface = None
         self._shutdown = False
 
     async def async_start(self) -> str:
@@ -56,10 +55,19 @@ class RoverTransport:
             signal_module.signal = lambda signum, handler: None
             try:
                 config_path = os.path.join(self._config_dir, "config")
-                config_content = """
+                config_content = f"""
 [reticulum]
 enable_transport = True
-share_instance = No
+share_instance = Yes
+loglevel = 5
+
+[interfaces]
+
+  [[Rover TCP]]
+    type = TCPServerInterface
+    enabled = Yes
+    listen_ip = 0.0.0.0
+    listen_port = {self._tcp_port}
 """
                 with open(config_path, "w") as f:
                     f.write(config_content.strip())
@@ -91,32 +99,13 @@ share_instance = No
 
             router.register_delivery_callback(self._on_lxmf_message)
 
-            self._logger.info("Starting TCP interface on 0.0.0.0:%s", self._tcp_port)
-            try:
-                from RNS.Interfaces.TCPInterface import TCPServerInterface
-                tcp_config = {
-                    "name": "Rover TCP",
-                    "listen_ip": "0.0.0.0",
-                    "listen_port": self._tcp_port,
-                }
-                self._tcp_interface = TCPServerInterface(
-                    self._rns,
-                    tcp_config,
-                )
-                self._tcp_interface.ifac_size = 16
-                self._tcp_interface.ifac_netname = None
-                self._tcp_interface.ifac_netkey = None
-                self._tcp_interface.announce_rate_target = None
-                self._tcp_interface.announce_rate_grace = None
-                self._tcp_interface.announce_rate_penalty = None
-                RNS.Transport.interfaces.append(self._tcp_interface)
-                self._logger.info(
-                    "TCP interface started on port %s", self._tcp_port
-                )
-            except Exception as exc:
-                self._logger.warning(
-                    "TCP interface failed on port %s: %s", self._tcp_port, exc
-                )
+            for iface in RNS.Transport.interfaces:
+                if "Rover TCP" in str(iface):
+                    self._logger.info(
+                        "TCP interface active on port %s (RNS-managed)",
+                        self._tcp_port,
+                    )
+                    break
 
         await self._hass.async_add_executor_job(_init)
         return self._identity.hash.hex()
@@ -226,14 +215,6 @@ share_instance = No
         self._shutdown = True
 
         def _do_shutdown():
-            if self._tcp_interface is not None:
-                try:
-                    if self._tcp_interface in RNS.Transport.interfaces:
-                        RNS.Transport.interfaces.remove(self._tcp_interface)
-                    self._tcp_interface = None
-                    self._logger.info("TCP interface removed")
-                except Exception:
-                    pass
             if self._router:
                 try:
                     self._router.stop()
