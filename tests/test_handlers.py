@@ -172,7 +172,7 @@ async def test_register_first_becomes_owner(handlers, registry, transport):
     registry.add_pending.assert_awaited_once()
     registry.approve_pending.assert_awaited_once()
     registry.consume_qr_token.assert_called_once_with("abcd")
-    assert transport.send.await_count == 5
+    assert transport.send.await_count == 6  # 4 CONFIG + 1 STATUS + 1 PONG
 
 
 @pytest.mark.asyncio
@@ -185,7 +185,7 @@ async def test_register_auto_approves_with_valid_uid(handlers, registry, transpo
     registry.add_pending.assert_awaited_once_with("22" * 16, "Petr")
     registry.approve_pending.assert_awaited_once()
     registry.consume_qr_token.assert_called_once_with("xyz")
-    assert transport.send.await_count == 5
+    assert transport.send.await_count == 6  # 4 CONFIG + 1 STATUS + 1 PONG
 
 
 @pytest.mark.asyncio
@@ -206,7 +206,7 @@ async def test_register_existing_user_resends_config(handlers, registry, transpo
     await handlers.handle_register(
         bytes.fromhex(SRC_OWNER), {"tp": 9, "name": "Owner", "uid": "abcd"},
     )
-    assert transport.send.await_count == 5
+    assert transport.send.await_count == 6  # 4 CONFIG + 1 STATUS + 1 PONG
     registry.add_pending.assert_not_awaited()
 
 

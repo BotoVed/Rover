@@ -63,6 +63,7 @@ async def test_start_subscribes(bridge, hass):
     hass.bus.async_listen.assert_called_once()
     args = hass.bus.async_listen.call_args[0]
     assert args[0] == "state_changed"
+    await bridge.async_stop()
 
 
 @pytest.mark.asyncio

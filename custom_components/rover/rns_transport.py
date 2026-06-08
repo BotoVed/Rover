@@ -206,7 +206,14 @@ loglevel = 5
                 title=b"",
                 desired_method=LXMF.LXMessage.DIRECT,
             )
-            msg.fields = _to_wire(fields)
+            wire = _to_wire(fields)
+            msg.fields = wire
+
+            self._logger.debug(
+                "OUT [%s] dst=%s... pre_keys=%s wire_keys=%s",
+                trace, destination_hash_hex[:8],
+                list(fields.keys()), list(wire.keys()),
+            )
 
             msg.register_delivery_callback(
                 lambda m: self._on_delivery(m, trace)

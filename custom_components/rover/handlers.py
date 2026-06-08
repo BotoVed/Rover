@@ -234,3 +234,5 @@ class RoverHandlers:
             _LOGGER.debug("CONFIG dst=%s... section=%s h=%s", dst_hex[:8], section, hashes[section])
 
         await self._send_status_snapshot(dst_hex)
+        pong = {"tp": TP_PING_PONG, "h": self._registry.get_hashes()}
+        await self._transport.send(dst_hex, pong)

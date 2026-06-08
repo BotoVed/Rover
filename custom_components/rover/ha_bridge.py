@@ -33,6 +33,8 @@ class RoverHABridge:
     - SE (sensors): additionally min 5 s between PUSH for the same device.
     """
 
+    PONG_INTERVAL = 8.0  # seconds, < stale_time (12s)
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -47,12 +49,14 @@ class RoverHABridge:
         self._pending: dict[int, dict] = {}
         self._timers: dict[int, asyncio.TimerHandle] = {}
         self._last_sent: dict[int, float] = {}
+        self._pong_task: asyncio.Task | None = None
 
     async def async_start(self) -> None:
         """Begin listening to HA state changes."""
         self._unsub = self._hass.bus.async_listen(
             EVENT_STATE_CHANGED, self._on_event
         )
+        self._pong_task = asyncio.ensure_future(self._pong_loop())
         _LOGGER.info("HA bridge started")
 
     async def async_stop(self) -> None:
@@ -60,6 +64,9 @@ class RoverHABridge:
         if self._unsub is not None:
             self._unsub()
             self._unsub = None
+        if self._pong_task is not None:
+            self._pong_task.cancel()
+            self._pong_task = None
         for timer in list(self._timers.values()):
             timer.cancel()
         self._timers.clear()
@@ -147,6 +154,12 @@ class RoverHABridge:
                 _LOGGER.exception("PUSH send error to %s...", dst_hex[:8])
 
         self._last_sent[short_id] = time.monotonic()
+
+    async def _pong_loop(self) -> None:
+        """Periodic PONG to keep links alive (stale_time ≈ 12s)."""
+        while True:
+            await asyncio.sleep(self.PONG_INTERVAL)
+            await self.broadcast_pong()
 
     async def broadcast_pong(self) -> None:
         """Send an unsolicited PONG to all approved remotes (DECISIONS 038)."""
