@@ -14,6 +14,26 @@ from homeassistant.core import HomeAssistant
 from .codec import decode
 from .const import DEFAULT_TCP_PORT, LOGGER_TRN
 
+# Outbound wire keys: Python string → msgpack integer key
+_OUT_KEY_MAP: dict[str, int] = {
+    "tp": 0,
+    "section": 1,
+    "h": 2,
+    "s": 2,    # states (STATUS)
+    "data": 3,
+}
+
+
+def _to_wire(fields: dict) -> dict:
+    """Convert string-keyed dict to integer-keyed dict for LXMF wire format."""
+    wire: dict = {}
+    for k, v in fields.items():
+        if isinstance(k, str) and k in _OUT_KEY_MAP:
+            wire[_OUT_KEY_MAP[k]] = v
+        else:
+            wire[k] = v
+    return wire
+
 
 class RoverTransport:
     def __init__(
@@ -186,7 +206,7 @@ loglevel = 5
                 title=b"",
                 desired_method=LXMF.LXMessage.DIRECT,
             )
-            msg.fields = fields
+            msg.fields = _to_wire(fields)
 
             msg.register_delivery_callback(
                 lambda m: self._on_delivery(m, trace)

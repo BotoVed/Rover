@@ -31,6 +31,7 @@ def registry():
     r.all_devices = MagicMock(return_value=[])
     r.add_pending = AsyncMock(return_value=True)
     r.approve_pending = AsyncMock(return_value=True)
+    r.consume_qr_token = MagicMock(return_value=True)
     return r
 
 
@@ -165,35 +166,46 @@ async def test_req_unauthorized(handlers, transport):
 async def test_register_first_becomes_owner(handlers, registry, transport):
     registry.all_users.return_value = []
     registry.is_approved.side_effect = lambda h: False
-    await handlers.handle_register(bytes.fromhex("11" * 16), {"tp": 9, "name": "Ivan"})
+    await handlers.handle_register(
+        bytes.fromhex("11" * 16), {"tp": 9, "name": "Ivan", "uid": "abcd"},
+    )
     registry.add_pending.assert_awaited_once()
     registry.approve_pending.assert_awaited_once()
+    registry.consume_qr_token.assert_called_once_with("abcd")
     assert transport.send.await_count == 5
 
 
 @pytest.mark.asyncio
-async def test_register_second_goes_to_pending(handlers, registry, transport):
+async def test_register_auto_approves_with_valid_uid(handlers, registry, transport):
     registry.all_users.return_value = [{"hash": SRC_OWNER, "name": "X", "role": "owner"}]
     registry.is_approved.side_effect = lambda h: h == SRC_OWNER
-    await handlers.handle_register(bytes.fromhex("22" * 16), {"tp": 9, "name": "Petr"})
+    await handlers.handle_register(
+        bytes.fromhex("22" * 16), {"tp": 9, "name": "Petr", "uid": "xyz"},
+    )
     registry.add_pending.assert_awaited_once_with("22" * 16, "Petr")
-    registry.approve_pending.assert_not_awaited()
-    transport.send.assert_not_awaited()
+    registry.approve_pending.assert_awaited_once()
+    registry.consume_qr_token.assert_called_once_with("xyz")
+    assert transport.send.await_count == 5
 
 
 @pytest.mark.asyncio
-async def test_register_when_full_rejected(handlers, registry, transport):
-    registry.all_users.return_value = [{"hash": f"{i:032x}", "name": "U", "role": "regular"} for i in range(5)]
+async def test_register_rejected_when_uid_mismatch(handlers, registry, transport):
+    registry.consume_qr_token = MagicMock(return_value=False)
     registry.is_approved.side_effect = lambda h: False
-    await handlers.handle_register(bytes.fromhex("33" * 16), {"tp": 9, "name": "Sixth"})
+    await handlers.handle_register(
+        bytes.fromhex("33" * 16), {"tp": 9, "name": "Badger", "uid": "wrong"},
+    )
     registry.add_pending.assert_not_awaited()
+    registry.approve_pending.assert_not_awaited()
     transport.send.assert_not_awaited()
 
 
 @pytest.mark.asyncio
 async def test_register_existing_user_resends_config(handlers, registry, transport):
     registry.is_approved.side_effect = lambda h: h == SRC_OWNER
-    await handlers.handle_register(bytes.fromhex(SRC_OWNER), {"tp": 9, "name": "Owner"})
+    await handlers.handle_register(
+        bytes.fromhex(SRC_OWNER), {"tp": 9, "name": "Owner", "uid": "abcd"},
+    )
     assert transport.send.await_count == 5
     registry.add_pending.assert_not_awaited()
 
@@ -203,6 +215,8 @@ async def test_register_name_trimmed_to_max(handlers, registry):
     registry.all_users.return_value = []
     registry.is_approved.side_effect = lambda h: False
     long_name = "X" * 100
-    await handlers.handle_register(bytes.fromhex("44" * 16), {"tp": 9, "name": long_name})
+    await handlers.handle_register(
+        bytes.fromhex("44" * 16), {"tp": 9, "name": long_name, "uid": "abcd"},
+    )
     call_args = registry.add_pending.await_args
     assert len(call_args[0][1]) <= 32

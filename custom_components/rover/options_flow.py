@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import logging
 import socket
+import time
 import urllib.parse
 from typing import Any
 
@@ -28,6 +30,7 @@ from .const import (
     LOGGER_ROOT,
     MAX_ACTIVE_REMOTES,
     QR_FORMAT_VERSION,
+    QR_TOKEN_LEN,
     TYPE_DEFS,
 )
 
@@ -536,6 +539,10 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self._back_to_menu()
 
+        # Generate one-time QR token for auto-approval
+        uid = hashlib.md5(str(time.time()).encode()).hexdigest()[:QR_TOKEN_LEN]
+        registry.set_qr_token(uid)
+
         # Build v2 QR payload
         runtime = self._runtime
         pubkey_b64 = ""
@@ -559,6 +566,7 @@ class RoverOptionsFlow(config_entries.OptionsFlow):
                 "fmt": QR_FORMAT_VERSION,
                 "dst": ihash,
                 "nm": meta.get("server_name", "Rover Hub"),
+                "uid": uid,
             }
         }
         if pubkey_b64:

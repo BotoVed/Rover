@@ -30,6 +30,7 @@ class RoverRegistry:
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._data: dict[str, Any] = {}
         self._on_changed_cb: Callable[[str], None] | None = None
+        self._qr_token: str | None = None
         self._logger = logging.getLogger(LOGGER_REG)
 
     @staticmethod
@@ -89,6 +90,20 @@ class RoverRegistry:
 
     def set_on_changed(self, callback: Callable[[str], None] | None) -> None:
         self._on_changed_cb = callback
+
+    def set_qr_token(self, token: str) -> None:
+        self._qr_token = token
+        self._logger.info("QR token set: %s", token)
+
+    def consume_qr_token(self, token: str) -> bool:
+        if self._qr_token is not None and self._qr_token == token:
+            self._qr_token = None
+            self._logger.info("QR token consumed: %s", token)
+            return True
+        self._logger.warning(
+            "QR token mismatch: got=%s expected=%s", token, self._qr_token
+        )
+        return False
 
     async def add_device(
         self,

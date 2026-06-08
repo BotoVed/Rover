@@ -18,8 +18,11 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(LOGGER_HND)
 
 # Wire protocol: Android uses compact integer keys over msgpack
-# Map them to the string keys used internally by handlers
-_KEY_MAP: dict[int, str] = {
+# Map them to the string keys used internally by handlers.
+# Key meaning varies by message type; key 0 is always tp.
+
+# General mapping (used as fallback)
+_GENERAL_MAP: dict[int, str] = {
     0: "tp",
     1: "h",
     2: "s",
@@ -30,6 +33,12 @@ _KEY_MAP: dict[int, str] = {
     7: "service",
     8: "type",
     9: "id",
+    10: "uid",
+}
+
+# Per-type overrides for keys that differ by message type
+_TP_MAPS: dict[int, dict[int, str]] = {
+    TP_REGISTER: {1: "uid"},
 }
 
 
@@ -39,10 +48,14 @@ def _normalize(fields: dict) -> dict:
         return fields
     if not any(isinstance(k, int) for k in fields):
         return fields
+
     result: dict = {}
+    tp = fields.get(0) if isinstance(fields.get(0), int) else None
+    type_map = _TP_MAPS.get(tp, {})
     for k, v in fields.items():
         if isinstance(k, int):
-            result[_KEY_MAP.get(k)] = v
+            mapped = type_map.get(k, _GENERAL_MAP.get(k))
+            result[mapped] = v
         else:
             result[k] = v
     return result

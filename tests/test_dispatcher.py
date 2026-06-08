@@ -36,6 +36,16 @@ async def test_dispatch_ping(dispatcher, handlers):
 
 
 @pytest.mark.asyncio
+async def test_dispatch_ping_int_keys(dispatcher, handlers):
+    """Android sends PING with integer keys: {0: 6, 1: hashes}."""
+    src = b"\xcc" * 16
+    await dispatcher.dispatch(src, {0: TP_PING_PONG, 1: {"m": "ab12"}})
+    handlers.handle_ping.assert_awaited_once()
+    args = handlers.handle_ping.call_args[0]
+    assert args[1]["h"] == {"m": "ab12"}
+
+
+@pytest.mark.asyncio
 async def test_dispatch_req(dispatcher, handlers):
     await dispatcher.dispatch(b"\xcc" * 16, {"tp": TP_REQ, "section": "d"})
     handlers.handle_req.assert_awaited_once()
@@ -45,6 +55,17 @@ async def test_dispatch_req(dispatcher, handlers):
 async def test_dispatch_register(dispatcher, handlers):
     await dispatcher.dispatch(b"\xdd" * 16, {"tp": TP_REGISTER, "name": "X"})
     handlers.handle_register.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_dispatch_register_int_keys(dispatcher, handlers):
+    """Android sends REGISTER with integer keys: {0: 9, 1: uid}."""
+    src = b"\xee" * 16
+    await dispatcher.dispatch(src, {0: TP_REGISTER, 1: "abcd"})
+    handlers.handle_register.assert_awaited_once()
+    args = handlers.handle_register.call_args[0]
+    assert args[1]["tp"] == TP_REGISTER
+    assert args[1]["uid"] == "abcd"
 
 
 @pytest.mark.asyncio

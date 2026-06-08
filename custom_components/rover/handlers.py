@@ -10,7 +10,8 @@ from .commands import build_service_call
 from .const import (
     DISPLAY_NAME_MAX_LEN,
     LOGGER_HND,
-    MAX_ACTIVE_REMOTES,
+    ROLE_OWNER,
+    ROLE_REGULAR,
     TP_CONFIG,
     TP_PING_PONG,
     TP_STATUS,
@@ -170,7 +171,7 @@ class RoverHandlers:
 
     # ---------- tp=9 REGISTER ----------
     async def handle_register(self, source_hash: bytes | None, fields: dict) -> None:
-        """Register new remote. First one becomes owner; rest go to pending."""
+        """Auto-approve via QR token uid. First remote becomes owner."""
         src_hex = source_hash.hex() if source_hash else None
         if src_hex is None:
             _LOGGER.warning("REGISTER reject: no source_hash")
@@ -181,36 +182,33 @@ class RoverHandlers:
             await self._send_full_config(src_hex)
             return
 
+        uid = fields.get("uid")
+        if not isinstance(uid, str) or not uid:
+            _LOGGER.warning("REGISTER reject: missing uid, src=%s...", src_hex[:8])
+            return
+
+        if not self._registry.consume_qr_token(uid):
+            _LOGGER.warning("REGISTER reject: invalid uid=%s src=%s...", uid, src_hex[:8])
+            return
+
         name = fields.get("name", "Unknown")
         if not isinstance(name, str):
             name = str(name)
         name = name.strip()[:DISPLAY_NAME_MAX_LEN] or "Unknown"
 
         ver = fields.get("ver")
-        _LOGGER.info("REGISTER src=%s... name=%r ver=%r", src_hex[:8], name, ver)
+        _LOGGER.info("REGISTER src=%s... name=%r ver=%r uid=%s", src_hex[:8], name, ver, uid)
 
         active_count = len(self._registry.all_users())
-        if active_count == 0:
-            if not await self._registry.add_pending(src_hex, name):
-                _LOGGER.warning("REGISTER: add_pending failed (queue full?)")
-                return
-            await self._registry.approve_pending(src_hex)
-            _LOGGER.info("REGISTER auto-approved as owner: %s... name=%r", src_hex[:8], name)
-            await self._send_full_config(src_hex)
+        role = ROLE_OWNER if active_count == 0 else ROLE_REGULAR
+
+        if not await self._registry.add_pending(src_hex, name):
+            _LOGGER.warning("REGISTER: add_pending failed (queue full?)")
             return
 
-        if active_count >= MAX_ACTIVE_REMOTES:
-            _LOGGER.warning(
-                "REGISTER reject: active full (%d/%d), src=%s...",
-                active_count, MAX_ACTIVE_REMOTES, src_hex[:8]
-            )
-            return
-
-        added = await self._registry.add_pending(src_hex, name)
-        if added:
-            _LOGGER.info("REGISTER queued for owner approval: %s... name=%r", src_hex[:8], name)
-        else:
-            _LOGGER.debug("REGISTER ignored (duplicate or queue full): %s...", src_hex[:8])
+        await self._registry.approve_pending(src_hex, role=role)
+        _LOGGER.info("REGISTER auto-approved role=%s: %s... name=%r", role, src_hex[:8], name)
+        await self._send_full_config(src_hex)
 
     async def _send_full_config(self, dst_hex: str) -> None:
         """Send all 4 config sections sequentially + STATUS snapshot."""
