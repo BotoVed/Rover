@@ -19,7 +19,7 @@ def test_lt_rgb():
 
 def test_cv():
     st = extract_state("open", {"current_position": 75, "current_tilt_position": 30}, "CV")
-    assert st == {"v": "open", "p": 75, "t": 30}
+    assert st == {"v": "open", "p": 75, "ti": 30}
 
 
 def test_cl():

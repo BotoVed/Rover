@@ -30,7 +30,7 @@ def test_cv_open():
 
 
 def test_cv_set_tilt():
-    calls = build_service_call("CV", {"cv": "set", "p": 50, "t": 25})
+    calls = build_service_call("CV", {"cv": "set", "p": 50, "ti": 25})
     assert ("cover", "set_cover_position", {"position": 50}) in calls
     assert ("cover", "set_cover_tilt_position", {"tilt_position": 25}) in calls
 

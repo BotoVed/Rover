@@ -34,7 +34,7 @@ def extract_state(state: str, attributes: dict | None, device_type: str) -> dict
             result["p"] = p
         t = attributes.get("current_tilt_position")
         if t is not None:
-            result["t"] = t
+            result["ti"] = t
         return result
 
     # CL

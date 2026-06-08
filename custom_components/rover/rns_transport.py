@@ -28,12 +28,12 @@ _INNER_KEY_MAP: dict[str, int] = {
     # area
     "id": 0, "name": 1,
     # device descriptor
-    "n": 1, "t": 2, "a": 3, "u": 4,
+    "n": 1, "dt": 2, "a": 3, "u": 4,
     # meta
     "brand": 0, "version": 1, "server_name": 2,
     # state fields
     "v": 1, "b": 2, "ct": 3, "rgb": 4,
-    "p": 5, "t": 6, "tc": 7, "th": 8, "tl": 9,
+    "p": 5, "ti": 6, "t": 6, "tc": 7, "th": 8, "tl": 9,
     "fan": 10, "preset": 11, "swing_h": 12, "swing_v": 13,
     "vol": 14, "title": 15, "artist": 16, "album": 17,
     "dur": 18, "pos": 19, "muted": 20,

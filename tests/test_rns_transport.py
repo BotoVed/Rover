@@ -23,8 +23,8 @@ def test_to_wire_unknown_key_passthrough():
 
 
 def test_to_wire_nested_config_devices():
-    result = _to_wire({"tp": 4, "section": "d", "h": "abcd", "data": [{"id": 1, "n": "Lamp", "t": "SW", "a": 1}]})
-    assert result == {0: 4, 1: "d", 2: "abcd", 3: [{0: 1, 1: "Lamp", 6: "SW", 3: 1}]}
+    result = _to_wire({"tp": 4, "section": "d", "h": "abcd", "data": [{"id": 1, "n": "Lamp", "dt": "SW", "a": 1}]})
+    assert result == {0: 4, 1: "d", 2: "abcd", 3: [{0: 1, 1: "Lamp", 2: "SW", 3: 1}]}
 
 
 def test_to_wire_nested_meta():

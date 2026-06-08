@@ -128,7 +128,7 @@ class RoverHandlers:
                 {
                     "id": d["short_id"],
                     "n": d["name"],
-                    "t": d["type"],
+                    "dt": d["type"],
                     "a": d.get("area_id"),
                 }
                 for d in self._registry.all_devices()
@@ -221,7 +221,7 @@ class RoverHandlers:
                 {
                     "id": d["short_id"],
                     "n": d["name"],
-                    "t": d["type"],
+                    "dt": d["type"],
                     "a": d.get("area_id"),
                 }
                 for d in self._registry.all_devices()

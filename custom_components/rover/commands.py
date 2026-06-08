@@ -42,8 +42,8 @@ def build_service_call(device_type: str, cmd_fields: dict) -> list[tuple[str, st
             calls.append(("cover", "stop_cover", {}))
         elif cv == "set":
             calls.append(("cover", "set_cover_position", {"position": cmd_fields["p"]}))
-        if "t" in cmd_fields:
-            calls.append(("cover", "set_cover_tilt_position", {"tilt_position": cmd_fields["t"]}))
+        if "ti" in cmd_fields:
+            calls.append(("cover", "set_cover_tilt_position", {"tilt_position": cmd_fields["ti"]}))
         return calls
 
     # CL
