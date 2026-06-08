@@ -52,7 +52,10 @@ def handlers(hass, registry, transport):
 async def test_cmd_unknown_source_rejected(handlers, hass, transport):
     await handlers.handle_cmd(bytes.fromhex(SRC_UNKNOWN), {"tp": 5, "id": 1, "s": True})
     hass.services.async_call.assert_not_awaited()
-    transport.send.assert_not_awaited()
+    transport.send.assert_awaited_once()
+    msg = transport.send.call_args[0][1]
+    assert msg["tp"] == 7
+    assert msg["reason"] == "forbidden"
 
 
 @pytest.mark.asyncio
@@ -120,7 +123,10 @@ async def test_ping_approved_sends_pong(handlers, transport, registry):
 @pytest.mark.asyncio
 async def test_ping_unknown_source_silent(handlers, transport):
     await handlers.handle_ping(bytes.fromhex(SRC_UNKNOWN), {"tp": 6, "h": {}})
-    transport.send.assert_not_awaited()
+    transport.send.assert_awaited_once()
+    msg = transport.send.call_args[0][1]
+    assert msg["tp"] == 7
+    assert msg["reason"] == "forbidden"
 
 
 # ---------- REQ ----------
@@ -158,7 +164,10 @@ async def test_req_invalid_section(handlers, transport):
 @pytest.mark.asyncio
 async def test_req_unauthorized(handlers, transport):
     await handlers.handle_req(bytes.fromhex(SRC_UNKNOWN), {"tp": 8, "section": "m"})
-    transport.send.assert_not_awaited()
+    transport.send.assert_awaited_once()
+    msg = transport.send.call_args[0][1]
+    assert msg["tp"] == 7
+    assert msg["reason"] == "forbidden"
 
 
 # ---------- REGISTER ----------

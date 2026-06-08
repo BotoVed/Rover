@@ -53,11 +53,22 @@ def _convert_nested(v: Any) -> Any:
     return v
 
 
+# PUSH merges state fields (from _INNER_KEY_MAP) with tp→0, id→9
+_PUSH_KEY_MAP: dict[str, int] = {
+    **_INNER_KEY_MAP,
+    "tp": 0,
+    "id": 9,
+}
+
+
 def _to_wire(fields: dict) -> dict:
     """Convert string-keyed dict to integer-keyed dict for LXMF wire format."""
+    tp = fields.get("tp")
+    key_map = _PUSH_KEY_MAP if tp == 1 else _OUT_KEY_MAP
+
     wire: dict = {}
     for k, v in fields.items():
-        key = _OUT_KEY_MAP.get(k, k) if isinstance(k, str) else k
+        key = key_map.get(k, k) if isinstance(k, str) else k
         wire[key] = _convert_nested(v)
     return wire
 

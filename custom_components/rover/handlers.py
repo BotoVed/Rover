@@ -13,6 +13,7 @@ from .const import (
     ROLE_OWNER,
     ROLE_REGULAR,
     TP_CONFIG,
+    TP_FORBIDDEN,
     TP_PING_PONG,
     TP_STATUS,
 )
@@ -47,7 +48,8 @@ class RoverHandlers:
             return
 
         if not self._registry.is_approved(src_hex):
-            _LOGGER.warning("CMD reject: source %s... not in users", src_hex[:8])
+            _LOGGER.warning("CMD reject: forbidden src=%s...", src_hex[:8])
+            await self._transport.send(src_hex, {"tp": TP_FORBIDDEN, "reason": "forbidden"})
             return
 
         short_id = fields.get("id")
@@ -94,7 +96,8 @@ class RoverHandlers:
         if src_hex is None:
             return
         if not self._registry.is_approved(src_hex):
-            _LOGGER.warning("PING reject: source %s... not approved", src_hex[:8])
+            _LOGGER.warning("PING reject: forbidden src=%s...", src_hex[:8])
+            await self._transport.send(src_hex, {"tp": TP_FORBIDDEN, "reason": "forbidden"})
             return
 
         pong = {"tp": TP_PING_PONG, "h": self._registry.get_hashes()}
@@ -108,7 +111,8 @@ class RoverHandlers:
         if src_hex is None:
             return
         if not self._registry.is_approved(src_hex):
-            _LOGGER.warning("REQ reject: source %s... not approved", src_hex[:8])
+            _LOGGER.warning("REQ reject: forbidden src=%s...", src_hex[:8])
+            await self._transport.send(src_hex, {"tp": TP_FORBIDDEN, "reason": "forbidden"})
             return
 
         section = fields.get("section")
