@@ -173,6 +173,10 @@ class RoverHandlers:
         _LOGGER.info("STATUS dst=%s... items=%d", dst_hex[:8], len(states))
         await self._transport.send(dst_hex, msg)
 
+    async def _send_forbidden(self, dst_hex: str) -> None:
+        """Send tp=7 FORBIDDEN to a non-approved remote."""
+        await self._transport.send(dst_hex, {"tp": TP_FORBIDDEN, "reason": "forbidden"})
+
     # ---------- tp=9 REGISTER ----------
     async def handle_register(self, source_hash: bytes | None, fields: dict) -> None:
         """Auto-approve via QR token uid. First remote becomes owner."""
@@ -189,10 +193,12 @@ class RoverHandlers:
         uid = fields.get("uid")
         if not isinstance(uid, str) or not uid:
             _LOGGER.warning("REGISTER reject: missing uid, src=%s...", src_hex[:8])
+            await self._send_forbidden(src_hex)
             return
 
         if not self._registry.consume_qr_token(uid):
             _LOGGER.warning("REGISTER reject: invalid uid=%s src=%s...", uid, src_hex[:8])
+            await self._send_forbidden(src_hex)
             return
 
         name = fields.get("name", "Unknown")

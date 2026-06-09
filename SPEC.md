@@ -1,6 +1,6 @@
 # Rover — Specification
 
-**Версия спецификации:** 0.3.0 (Reticulum-архитектура)
+**Версия спецификации:** 0.4.0 (Reticulum-архитектура)
 **Статус:** черновик, готов для реализации с нуля
 **Лицензия:** GPL v3
 
@@ -72,7 +72,7 @@ Reticulum / LXMF берут на себя:
 
 ### 3.3. Что пишем мы
 
-- Application layer: типы сообщений (`tp=2..6, 8, 9`), формат полей
+- Application layer: типы сообщений (`tp=2..7, 8, 9`), формат полей
 - Регистр устройств и пользователей на стороне HA
 - Маппинг entity_id ↔ short_id
 - Логику команд (CMD → service call) и состояний (state change → PUSH)
@@ -104,6 +104,27 @@ LXMF определяет следующие поля:
 | Fields     | msgpack   | **Наш payload** (см. раздел 6)                |
 
 Весь протокол Rover живёт внутри `Fields`. Структура: msgpack-словарь с ключом `tp` и type-specific полями.
+
+### 3.6. Wire format (integer ключи)
+
+LXMF Fields передаются как msgpack-словарь. lxmf-kt (Android) требует
+integer ключи на верхнем уровне. Вложенные объекты используют строковые ключи.
+
+**Верхний уровень — integer ключи:**
+
+| Ключ | Имя      | Используется в        |
+|------|----------|-----------------------|
+| 0    | tp       | все сообщения         |
+| 1    | section / v / reason | CONFIG, PUSH, FORBIDDEN |
+| 2    | h / s    | PING/PONG, STATUS     |
+| 3    | data     | CONFIG                |
+| 9    | id       | CMD, PUSH             |
+
+**Вложенные объекты** (внутри `data` и `s`) — строковые ключи:
+- device descriptor: `id`, `n`, `dt`, `a`, `u`
+- area: `id`, `name`
+- meta: `brand`, `version`, `server_name`
+- state: `id`, `v`, `b`, `ct`, `p`, `ti`, `t`, `vol`, `sp`, `u` и др.
 
 **Python API (LXMF ≥0.9.6):**
 ```python
@@ -184,13 +205,20 @@ def send_message(remote_hash: bytes, fields: dict) -> bool:
 
 4. **Сканирование QR.** Пользователь сканирует QR с экрана HA. Приложение запоминает destination hash сервера.
 
-   **Формат QR:** `{"rvr": {"fmt": 1, "dst": "a1b2c3d4...", "nm": "Дом на колёсах"}}`
+   **Формат QR:** `{"rvr": {"fmt": 2, "dst": "a1b2c3d4...", "nm": "Дом на колёсах", "uid": "a1b2"}}`
 
-5. **REGISTER.** Приложение отправляет HA сообщение `tp=9 REGISTER` с display name пользователя и опциональной версией App.
+   Поле `uid` — одноразовый 4-символьный токен для автоматического апрува.
 
-6. **Pending или auto-approve.**
-   - Если активных remote'ов **0** → HA автоматически одобряет, назначает роль **owner**, добавляет в активные, отправляет полный CONFIG.
-   - Если активных remote'ов **≥1** → HA добавляет запрос в pending list. Owner получает PUSH-уведомление в HA UI «Новый запрос от <имя>».
+5. **REGISTER.** Приложение отправляет HA сообщение `tp=9 REGISTER` с display name пользователя, опциональной версией App и **одноразовым токеном `uid` из QR-кода**.
+
+6. **Approval по QR-токену.**
+   - HA проверяет `uid` из REGISTER против текущего активного QR-токена.
+   - Если совпадает → автоматически одобряет, назначает роль
+     (первый remote = **owner**, остальные = **regular**), отправляет полный CONFIG.
+   - Если не совпадает → REGISTER игнорируется (без ответа).
+   - После успешного апрува токен уничтожается.
+   - В единицу времени активен только один QR-токен.
+     Новая генерация QR инвалидирует предыдущий.
 
 7. **Approve owner'ом.** Owner открывает HA UI, видит pending request, нажимает «Одобрить». HA переводит запись в активные (роль **regular**), отправляет полный CONFIG этому телефону.
 
@@ -447,8 +475,8 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 
 ```
 [
-  {"id": 49283, "n": "Розетка", "t": "SW", "a": 1},
-  {"id": 7150,  "n": "Температура", "t": "SE", "a": 1, "u": "°C"},
+  {"id": 49283, "n": "Розетка", "dt": "SW", "a": 1},
+  {"id": 7150,  "n": "Температура", "dt": "SE", "a": 1, "u": "°C"},
   ...
 ]
 ```
@@ -456,7 +484,7 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 Поля:
 - `id` — short_id (int 0-65535)
 - `n` — отображаемое имя
-- `t` — тип устройства (см. раздел 8)
+- `dt` — тип устройства (см. раздел 8)
 - `a` — id области (или null)
 - type-specific поля (например, `u` — единица измерения для SE)
 
@@ -477,7 +505,7 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 
 ## 8. Типы устройств
 
-Кодировка типа — 2 символа в поле `t`.
+Кодировка типа — 2 символа в поле `dt`.
 
 | Код | Тип                | HA domain     |
 |-----|--------------------|---------------|
@@ -499,7 +527,7 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 |-----|----------|--------|
 | SW  | `s: bool` | `{tp:5, id:1, s:true}` |
 | LT  | `s: bool`, `b?: int 0-100`, `ct?: int` (K), `rgb?: [r,g,b] int 0-255`, `ef?: str` | `{tp:5, id:2, s:true, b:75, ct:2700}` |
-| CV  | `cv: "open"\|"close"\|"stop"\|"set"`, `p?: int 0-100`, `t?: int 0-100` (tilt) | `{tp:5, id:3, cv:"set", p:50}` |
+| CV  | `cv: "open"\|"close"\|"stop"\|"set"`, `p?: int 0-100`, `ti?: int 0-100` (tilt) | `{tp:5, id:3, cv:"set", p:50}` |
 | CL  | `hvac?: str`, `t?: float`, `th?: float` (temp high), `tl?: float` (temp low), `fan?: str`, `preset?: str`, `swing_h?: str`, `swing_v?: str` | `{tp:5, id:4, hvac:"heat", t:22.5}` |
 | LK  | `s: bool` (true=locked) | `{tp:5, id:5, s:true}` |
 | MS  | `ms: "play"\|"pause"\|"stop"\|"next"\|"prev"\|"vol"\|"mute"\|"unmute"`, `vol?: int 0-100`, `seek?: int` (sec) | `{tp:5, id:6, ms:"vol", vol:30}` |
@@ -512,7 +540,7 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 **Правила:**
 - `rgb` — массив из 3 int `[r, g, b]`, каждый 0-255.
 - `ef` — строковый идентификатор эффекта (например, "colorloop", "random").
-- `t` (tilt) для CV — угол наклона жалюзи 0-100.
+- `ti` (tilt) для CV — угол наклона жалюзи 0-100.
 - `th` / `tl` для CL — target temp high/low (для climate с range).
 - `seek` для MS — позиция в секундах.
 
@@ -522,7 +550,7 @@ HA отвечает `tp=4 CONFIG` с запрошенной секцией.
 |-----|------------|
 | SW  | `v: "on"\|"off"` |
 | LT  | `v: "on"\|"off"`, `b?: int 0-100`, `ct?: int`, `rgb?: [r,g,b]`, `ef?: str` |
-| CV  | `v: "open"\|"closed"\|"opening"\|"closing"`, `p?: int 0-100`, `t?: int 0-100` |
+| CV  | `v: "open"\|"closed"\|"opening"\|"closing"`, `p?: int 0-100`, `ti?: int 0-100` |
 | CL  | `v: str` (hvac mode), `t?: float`, `tc?: float`, `th?: float`, `tl?: float`, `fan?: str`, `preset?: str`, `swing_h?: str`, `swing_v?: str` |
 | LK  | `v: "locked"\|"unlocked"` |
 | MS  | `v: "playing"\|"paused"\|"idle"\|"off"\|"buffering"\|"standby"`, `vol?: int 0-100`, `title?: str`, `artist?: str`, `album?: str`, `dur?: int`, `pos?: int`, `muted?: bool` |
@@ -680,7 +708,7 @@ ROLE_OWNER = "owner"
 ROLE_REGULAR = "regular"
 
 # QR
-QR_FORMAT_VERSION = 1
+QR_FORMAT_VERSION = 2
 
 # Типы сообщений
 TP_STATUS = 2
@@ -700,7 +728,10 @@ REQUIREMENTS = ["rns>=1.2.0", "lxmf>=0.9.6"]
 
 ## 13. Версионирование
 
-- **SemVer.** Текущая версия SPEC: `0.3.0`.
+- **SemVer.** Текущая версия SPEC: `0.4.0`.
+
+**0.4.0** — QR uid токен, tp=7 FORBIDDEN, dt/ti переименования,
+wire format integer ключи на верхнем уровне
 - **Bumping rules:**
   - Patch (0.3.x) — баг-фиксы, уточнения формулировок
   - Minor (0.x.0) — новые опциональные поля, новые tp, новые типы устройств (backwards-compatible)
