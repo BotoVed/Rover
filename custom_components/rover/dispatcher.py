@@ -39,6 +39,7 @@ _GENERAL_MAP: dict[int, str] = {
 # Per-type overrides for keys that differ by message type
 _TP_MAPS: dict[int, dict[int, str]] = {
     TP_REGISTER: {1: "uid"},
+    TP_CMD: {3: "b", 10: "rgb", 11: "ct", 12: "ef"},
 }
 
 
