@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import signal as signal_module
-from typing import Any, Callable
+from typing import Callable
 
 import RNS
 import LXMF
@@ -15,8 +15,6 @@ from .codec import decode
 from .const import DEFAULT_TCP_PORT, LOGGER_TRN
 
 # Outbound wire keys: Python string → msgpack integer key
-_LOG = logging.getLogger("custom_components.rover.rns")
-
 _OUT_KEY_MAP: dict[str, int] = {
     "tp": 0,
     "section": 1,
@@ -26,61 +24,12 @@ _OUT_KEY_MAP: dict[str, int] = {
     "reason": 1,
 }
 
-# Keys for nested objects (STATUS/PUSH states, CONFIG sections)
-_INNER_KEY_MAP: dict[str, int] = {
-    # area
-    "id": 0, "name": 1,
-    # device descriptor
-    "n": 1, "dt": 2, "a": 3, "u": 4,
-    # meta
-    "brand": 0, "version": 1, "server_name": 2,
-    # state fields
-    "v": 1, "b": 2, "ct": 3, "rgb": 4,
-    "p": 5, "ti": 6, "t": 6, "tc": 7, "th": 8, "tl": 9,
-    "fan": 10, "preset": 11, "swing_h": 12, "swing_v": 13,
-    "vol": 14, "title": 15, "artist": 16, "album": 17,
-    "dur": 18, "pos": 19, "muted": 20,
-    "sp": 21, "osc": 22, "dir": 23,
-    "ef": 24, "u": 25,
-}
-
-
-def _convert_nested(v: Any) -> Any:
-    if isinstance(v, dict):
-        result = {}
-        for k, vv in v.items():
-            if isinstance(k, str):
-                mapped = _INNER_KEY_MAP.get(k, k)
-                new_key = int(mapped) if isinstance(mapped, int) else mapped
-            else:
-                new_key = int(k) if isinstance(k, (int, float)) else k
-            result[new_key] = _convert_nested(vv)
-        if any(isinstance(k, str) for k in v.keys()):
-            _LOG.warning("NESTED input keys: %s", list(v.keys()))
-            _LOG.warning("NESTED output keys: %s", list(result.keys()))
-        return result
-    if isinstance(v, list):
-        return [_convert_nested(item) for item in v]
-    return v
-
-
-# PUSH merges state fields (from _INNER_KEY_MAP) with tp→0, id→9
-_PUSH_KEY_MAP: dict[str, int] = {
-    **_INNER_KEY_MAP,
-    "tp": 0,
-    "id": 9,
-}
-
-
 def _to_wire(fields: dict) -> dict:
     """Convert string-keyed dict to integer-keyed dict for LXMF wire format."""
-    tp = fields.get("tp")
-    key_map = _PUSH_KEY_MAP if tp == 1 else _OUT_KEY_MAP
-
     wire: dict = {}
     for k, v in fields.items():
-        key = key_map.get(k, k) if isinstance(k, str) else k
-        wire[int(key) if isinstance(key, int) else key] = _convert_nested(v)
+        key = k
+        wire[int(key) if isinstance(key, int) else key] = v
     return wire
 
 
