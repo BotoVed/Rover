@@ -16,19 +16,49 @@ from .const import DEFAULT_TCP_PORT, LOGGER_TRN
 
 # Outbound wire keys: Python string → msgpack integer key
 _OUT_KEY_MAP: dict[str, int] = {
+    # Common
     "tp": 0,
     "section": 1,
     "h": 2,
-    "s": 2,    # states (STATUS)
     "data": 3,
     "reason": 1,
+    # STATUS
+    "s": 2,
+    # PUSH top-level state fields
+    "id": 9,
+    "v": 1,
+    "b": 2,
+    "ct": 3,
+    "rgb": 4,
+    "p": 5,
+    "ti": 6,
+    "t": 6,
+    "tc": 7,
+    "th": 8,
+    "tl": 9,
+    "fan": 10,
+    "preset": 11,
+    "swing_h": 12,
+    "swing_v": 13,
+    "vol": 14,
+    "title": 15,
+    "artist": 16,
+    "album": 17,
+    "dur": 18,
+    "pos": 19,
+    "muted": 20,
+    "sp": 21,
+    "osc": 22,
+    "dir": 23,
+    "ef": 24,
+    "u": 25,
 }
 
 def _to_wire(fields: dict) -> dict:
     """Convert string-keyed dict to integer-keyed dict for LXMF wire format."""
     wire: dict = {}
     for k, v in fields.items():
-        key = k
+        key = _OUT_KEY_MAP.get(k, k) if isinstance(k, str) else k
         wire[int(key) if isinstance(key, int) else key] = v
     return wire
 
