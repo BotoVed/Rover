@@ -15,6 +15,8 @@ from .codec import decode
 from .const import DEFAULT_TCP_PORT, LOGGER_TRN
 
 # Outbound wire keys: Python string → msgpack integer key
+_LOG = logging.getLogger("custom_components.rover.rns")
+
 _OUT_KEY_MAP: dict[str, int] = {
     "tp": 0,
     "section": 1,
@@ -53,6 +55,9 @@ def _convert_nested(v: Any) -> Any:
             else:
                 new_key = int(k) if isinstance(k, (int, float)) else k
             result[new_key] = _convert_nested(vv)
+        if any(isinstance(k, str) for k in v.keys()):
+            _LOG.warning("NESTED input keys: %s", list(v.keys()))
+            _LOG.warning("NESTED output keys: %s", list(result.keys()))
         return result
     if isinstance(v, list):
         return [_convert_nested(item) for item in v]
