@@ -1,6 +1,7 @@
 """RNS/LXMF transport wrapper for Rover."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import signal as signal_module
@@ -143,7 +144,8 @@ loglevel = 5
                 stamp_cost=None,
             )
             self._delivery_dest = dest
-            self._logger.info("LXMF delivery identity registered")
+            dest.announce()
+            self._logger.info("LXMF delivery identity announced: %s", dest.hexhash)
 
             router.register_delivery_callback(self._on_lxmf_message)
 
@@ -156,7 +158,16 @@ loglevel = 5
                     break
 
         await self._hass.async_add_executor_job(_init)
+        asyncio.ensure_future(self._announce_loop())
         return self._identity.hash.hex()
+
+    async def _announce_loop(self) -> None:
+        """Periodic announce every 60s to keep paths fresh."""
+        while True:
+            await asyncio.sleep(60)
+            if self._delivery_dest is not None:
+                self._delivery_dest.announce()
+                self._logger.debug("Periodic announce sent")
 
     @property
     def identity(self) -> RNS.Identity | None:
