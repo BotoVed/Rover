@@ -21,6 +21,7 @@ _OUT_KEY_MAP: dict[str, int] = {
     "h": 2,
     "s": 2,    # states (STATUS)
     "data": 3,
+    "reason": 1,
 }
 
 # Keys for nested objects (STATUS/PUSH states, CONFIG sections)
@@ -44,10 +45,15 @@ _INNER_KEY_MAP: dict[str, int] = {
 
 def _convert_nested(v: Any) -> Any:
     if isinstance(v, dict):
-        return {
-            _INNER_KEY_MAP.get(k, k) if isinstance(k, str) else k: _convert_nested(vv)
-            for k, vv in v.items()
-        }
+        result = {}
+        for k, vv in v.items():
+            if isinstance(k, str):
+                mapped = _INNER_KEY_MAP.get(k, k)
+                new_key = int(mapped) if isinstance(mapped, int) else mapped
+            else:
+                new_key = int(k) if isinstance(k, (int, float)) else k
+            result[new_key] = _convert_nested(vv)
+        return result
     if isinstance(v, list):
         return [_convert_nested(item) for item in v]
     return v
@@ -69,7 +75,7 @@ def _to_wire(fields: dict) -> dict:
     wire: dict = {}
     for k, v in fields.items():
         key = key_map.get(k, k) if isinstance(k, str) else k
-        wire[key] = _convert_nested(v)
+        wire[int(key) if isinstance(key, int) else key] = _convert_nested(v)
     return wire
 
 
